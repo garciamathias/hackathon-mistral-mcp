@@ -1,8 +1,6 @@
-Projet : Répliquer le jeu Clash Royale jouable sur site web humain vs Bot (not online multi-player)
+Projet : Replicate the Clash Royale game playable on website human vs Bot (not online multi-player)
+Find this project on vercel : mcp-hackthon.vercel.app
 
-├── README.md
-├── TODO.md
-├── package-lock.json
 └── ui
     ├── components
     ├── components.json
