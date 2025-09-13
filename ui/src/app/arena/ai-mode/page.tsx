@@ -6,19 +6,14 @@ import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
-import { ServerSyncEngine } from "@/game/ServerSyncEngine";
+import { useGameEngine } from "@/game/useGameEngine";
+import { gameEngine } from "@/game/GameEngine";
 
 export default function AIArena() {
-  const [gameEngine, setGameEngine] = useState<ServerSyncEngine | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
-  const [troops, setTroops] = useState<any[]>([]);
-  const [towers, setTowers] = useState<any[]>([]);
-  const [gameEnded, setGameEnded] = useState(false);
-  const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
+  const [aiPollingInterval, setAiPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [tacticalAnalysis, setTacticalAnalysis] = useState<string>('');
   const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
-  const [isGameRunning, setIsGameRunning] = useState(false);
-  const [isGamePaused, setIsGamePaused] = useState(false);
 
   const showGrid = false;
   const numRows = 34;
@@ -139,49 +134,81 @@ export default function AIArena() {
     }
   }), []);
 
-  // Initialize game with server
+  // Convert TOWER to format compatible with game engine
+  const towersForGame = Object.values(TOWER).map(tower => ({
+    id: tower.id,
+    type: tower.type as 'king' | 'princess',
+    team: tower.team as 'red' | 'blue',
+    row: tower.row,
+    col: tower.col,
+    health: 100,
+    maxHealth: 100,
+    isAlive: true,
+    active: true,
+    position: { row: tower.row, col: tower.col },
+    offsetX: tower.offsetX,
+    offsetY: tower.offsetY
+  }));
+
+  // Initialize towers in GameEngine
+  React.useEffect(() => {
+    Object.values(TOWER).forEach(tower => {
+      gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
+    });
+
+    return () => {
+      Object.values(TOWER).forEach(tower => {
+        gameEngine.removeTower(tower.id);
+      });
+    };
+  }, [TOWER]);
+
+  // Use the normal game engine hook
+  const {
+    troops,
+    towers: gameEngineTowers,
+    spawnTroop,
+    startGame,
+    pauseGame,
+    resumeGame,
+    stopGame,
+    resetGame,
+    isGameRunning,
+    isGamePaused,
+    gameEnded,
+    winner
+  } = useGameEngine(towersForGame, undefined);
+
+  // Initialize game with server for AI
   useEffect(() => {
-    const initGame = async () => {
-      const engine = new ServerSyncEngine();
-
+    const initAIGame = async () => {
       try {
-        const id = await engine.initializeServerGame(true); // AI mode enabled
-        setGameId(id);
-        setGameEngine(engine);
-
-        // Set up callbacks
-        engine.setOnUpdate((updatedTroops) => {
-          console.log('🔄 Received troops update from engine:', {
-            count: updatedTroops.length,
-            troops: updatedTroops.map(t => ({
-              id: t.id,
-              type: t.type,
-              team: t.team,
-              position: t.position,
-              health: t.health
-            }))
-          });
-          setTroops(updatedTroops);
+        // Initialize game on server
+        const response = await fetch('/api/game/init', {
+          method: 'POST',
         });
 
-        engine.setOnGameEnd((winner) => {
-          setGameEnded(true);
-          setWinner(winner);
-        });
+        if (!response.ok) {
+          throw new Error('Failed to initialize game');
+        }
 
-        // Start the game automatically
-        engine.start();
-        setIsGameRunning(true);
+        const data = await response.json();
+        setGameId(data.game_id);
+        console.log('🎮 Game initialized with ID:', data.game_id);
+
+        // Start the local game
+        startGame();
       } catch (error) {
         console.error('Failed to initialize AI game:', error);
       }
     };
 
-    initGame();
+    initAIGame();
 
     return () => {
-      if (gameEngine) {
-        gameEngine.stop();
+      stopGame();
+      if (aiPollingInterval) {
+        clearInterval(aiPollingInterval);
       }
     };
   }, []);
