@@ -10,34 +10,85 @@ export default function Arena() {
 
   const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
 
-  // Positions des tours
-  const towers = [
-    // King red (2x2 cells)
-    { row: 2, col: 8, type: 'king_red', size: 6, offsetX: 1, offsetY: -2 },
-    
-    // Red princess 1 (1x1 cell)
-    { row: 6, col: 3, type: 'princess_red', size: 4, offsetX: -0.7, offsetY: -2.3 },
-
-    // Red princess 2 (1x1 cell)
-    { row: 6, col: 14, type: 'princess_red', size: 4, offsetX: 0, offsetY: -2.3 },
-    
-    // Blue princess 1 (1x1 cell)
-    { row: 27, col: 3, type: 'princess_blue', size: 7.4, offsetX: -0.4, offsetY: -2 },
-    
-    // Blue princess 2 (1x1 cell)
-    { row: 27, col: 14, type: 'princess_blue', size: 7.4, offsetX: 0, offsetY: -2 },
-    
-    // King blue (2x2 cells)
-    { row: 30, col: 8, type: 'king_blue', size: 6.5, offsetX: 1, offsetY: -2 },
-  ];
-
-  const getTowerImage = (type: string) => {
-    switch(type) {
-      case 'king_red': return '/images/towers/king_red.png';
-      case 'princess_red': return '/images/towers/princess_red.png';
-      case 'princess_blue': return '/images/towers/princess_blue.png';
-      case 'king_blue': return '/images/towers/king_blue.png';
-      default: return null;
+  // Configuration des tours
+  const TOWER = {
+    KING_RED: {
+      id: 'king_red',
+      name: 'King Red',
+      image: '/images/towers/king_red.png',
+      row: 2,
+      col: 8,
+      size: 6,
+      offsetX: 1,
+      offsetY: -2,
+      team: 'red',
+      type: 'king',
+      active: true,
+    },
+    PRINCESS_RED_1: {
+      id: 'princess_red',
+      name: 'Princess Red',
+      image: '/images/towers/princess_red.png',
+      row: 6,
+      col: 3,
+      size: 4,
+      offsetX: -0.7,
+      offsetY: -2.3,
+      team: 'red',
+      type: 'princess',
+      active: true,
+    },
+    PRINCESS_RED_2: {
+      id: 'princess_red_2',
+      name: 'Princess Red',
+      image: '/images/towers/princess_red.png',
+      row: 6,
+      col: 14,
+      size: 4,
+      offsetX: 0,
+      offsetY: -2.3,
+      team: 'red',
+      type: 'princess',
+      active: true,
+    },
+    PRINCESS_BLUE_1: {
+      id: 'princess_blue',
+      name: 'Princess Blue',
+      image: '/images/towers/princess_blue.png',
+      row: 27,
+      col: 3,
+      size: 7.4,
+      offsetX: -0.4,
+      offsetY: -2,
+      team: 'blue',
+      type: 'princess',
+      active: true,
+    },
+    PRINCESS_BLUE_2: {
+      id: 'princess_blue_2',
+      name: 'Princess Blue',
+      image: '/images/towers/princess_blue.png',
+      row: 27,
+      col: 14,
+      size: 7.4,
+      offsetX: 0,
+      offsetY: -2,
+      team: 'blue',
+      type: 'princess',
+      active: true,
+    },
+    KING_BLUE: {
+      id: 'king_blue',
+      name: 'King Blue',
+      image: '/images/towers/king_blue.png',
+      row: 30,
+      col: 8,
+      size: 6.5,
+      offsetX: 1,
+      offsetY: -2,
+      team: 'blue',
+      type: 'king',
+      active: true,
     }
   };
 
@@ -68,16 +119,17 @@ export default function Arena() {
               const row = Math.floor(index / numCols);
               const col = index % numCols;
               const isEven = (row + col) % 2 === 0;
-              const tower = towers.find(tower => {
-                return row === tower.row && col === tower.col;
+              const towerPosition = Object.values(TOWER).find(pos => {
+                return row === pos.row && col === pos.col;
               });
               
               // Afficher l'image seulement sur la case principale (coin supérieur gauche)
-              const shouldShowTower = tower && (
-                row === tower.row && col === tower.col
+              const shouldShowTower = towerPosition && (
+                row === towerPosition.row && col === towerPosition.col
               );
               
-              const towerImage = shouldShowTower ? getTowerImage(tower.type) : null;
+              const towerImage = shouldShowTower ? towerPosition.image : null;
+              const tower = towerPosition;
               
               return (
                 <div
@@ -96,7 +148,7 @@ export default function Arena() {
                   {towerImage && (
                     <img
                       src={towerImage}
-                      alt={tower?.type}
+                      alt={tower?.name}
                       className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
                       style={{
                         transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
