@@ -15,7 +15,9 @@ export enum TroopState {
 
 export enum TroopType {
   GIANT = 'giant',
-  BABY_DRAGON = 'babyDragon'
+  BABY_DRAGON = 'babyDragon',
+  MINI_PEKKA = 'miniPekka',
+  VALKYRIE = 'valkyrie'
 }
 
 export interface BaseTroop {
@@ -127,6 +129,46 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
     scale: 2.5,
     focusOnBuildings: false, // Cible le plus proche (troupe ou tour)
     flying: true // Ignore les flagged cells
+  },
+  [TroopType.MINI_PEKKA]: {
+    // Statistiques niveau 11 officielles Clash Royale
+    maxHealth: 1361, // Points de vie niveau 11
+    speed: 1.8, // Vitesse de déplacement (rapide)
+    attackDamage: 720, // Dégâts par attaque niveau 11 (très élevés)
+    attackSpeed: 1.8, // Vitesse d'attaque (1.8 seconde)
+    gifPaths: {
+      walk: {
+        player: '/images/troops/minipekka/MiniPekka_walk_player_62-62.gif',
+        opponent: '/images/troops/minipekka/MiniPekka_walk_opponent_62-62.gif'
+      },
+      fight: {
+        player: '/images/troops/minipekka/MiniPekka_fight_player_66-54.gif',
+        opponent: '/images/troops/minipekka/MiniPekka_fight_opponent_66-54.gif'
+      }
+    },
+    focusOnBuildings: false, // Cible le plus proche (troupe ou tour)
+    flying: false,
+    scale: 2.0
+  },
+  [TroopType.VALKYRIE]: {
+    // Statistiques niveau 11 officielles Clash Royale
+    maxHealth: 1908, // Points de vie niveau 11
+    speed: 1.5, // Vitesse de déplacement (moyenne)
+    attackDamage: 267, // Dégâts par attaque niveau 11 (attaque en zone)
+    attackSpeed: 267/169, // Vitesse d'attaque
+    gifPaths: {
+      walk: {
+        player: '/images/troops/valkyrie/Valkyrie_walk_player_46-52.gif',
+        opponent: '/images/troops/valkyrie/Valkyrie_walk_opponent_46-52.gif'
+      },
+      fight: {
+        player: '/images/troops/valkyrie/Valkyrie_fight_player_132-132.gif',
+        opponent: '/images/troops/valkyrie/Valkyrie_fight_opponent_132-132.gif'
+      }
+    },
+    focusOnBuildings: false, // Cible le plus proche (troupe ou tour)
+    flying: false,
+    scale: 2.2
   }
 };
 

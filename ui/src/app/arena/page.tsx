@@ -1,41 +1,29 @@
 "use client";
 
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import React, { useState } from "react";
 import { useGameEngine } from "@/game/useGameEngine";
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
+import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 
 export default function Arena() {
+  const showFlaggedCells = false;
+  const showGrid = false;
+
   const numRows = 34;
   const numCols = 18;
 
-  const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
-  const [highlightFlaggedCells, setHighlightFlaggedCells] = useState<boolean>(false);
   const [spawnMode, setSpawnMode] = useState<{active: boolean, team: 'red' | 'blue' | null, troopType: TroopType | null}>({
     active: false,
     team: null,
     troopType: null
   });
-   
-  // Fonction pour obtenir toutes les cellules marquées des tours actives
-  const getActiveTowersFlaggedCells = () => {
-    const flaggedCells = new Set<string>();
-    
-    Object.values(TOWER).forEach(tower => {
-      if (tower.active && tower.flagged_cells) {
-        tower.flagged_cells.forEach(([row, col]) => {
-          flaggedCells.add(`${row}-${col}`);
-        });
-      }
-    });
-    
-    return flaggedCells;
-  };
 
+  const isArenaVisible = true; // L'arène est immédiatement visible pour éviter les délais de transition
+   
   // Configuration des tours - mémorisé pour éviter les re-rendus
   const TOWER = React.useMemo(() => ({
     KING_RED: {
@@ -214,9 +202,6 @@ export default function Arena() {
     offsetY: tower.offsetY
   }));
   
-  // Obtenir les flagged cells pour le moteur de jeu
-  const flaggedCells = getActiveTowersFlaggedCells();
-  
   // Initialiser les tours dans le GameEngine
   React.useEffect(() => {
     // Ajouter toutes les tours au GameEngine
@@ -236,15 +221,46 @@ export default function Arena() {
   const { 
     troops,
     towers: gameEngineTowers,
-    gameStats, 
     spawnTroop,
     startGame, 
     pauseGame, 
     resumeGame, 
     stopGame,
+    resetGame,
     isGameRunning,
-    isGamePaused 
-  } = useGameEngine(towersForGame, flaggedCells);
+    isGamePaused,
+    gameEnded,
+    winner
+  } = useGameEngine(towersForGame, undefined);
+
+  // Fonction pour obtenir toutes les cellules marquées des tours actives
+  const getActiveTowersFlaggedCells = React.useCallback(() => {
+    const flaggedCells = new Set<string>();
+    
+    Object.values(TOWER).forEach(tower => {
+      // Vérifier si la tour est encore vivante dans le GameEngine
+      const gameEngineTower = gameEngineTowers.find(t => t.id === tower.id);
+      const isTowerAlive = !gameEngineTower || gameEngineTower.isAlive;
+      
+      if (tower.active && tower.flagged_cells && isTowerAlive) {
+        tower.flagged_cells.forEach(([row, col]) => {
+          flaggedCells.add(`${row}-${col}`);
+        });
+      }
+    });
+    
+    return flaggedCells;
+  }, [gameEngineTowers, TOWER]);
+
+  // Obtenir les flagged cells pour le moteur de jeu - mis à jour quand les tours changent
+  const flaggedCells = React.useMemo(() => getActiveTowersFlaggedCells(), [getActiveTowersFlaggedCells]);
+
+  // Connecter les flagged cells au moteur de jeu quand elles changent
+  React.useEffect(() => {
+    if (flaggedCells) {
+      gameEngine.connectFlaggedCells(flaggedCells);
+    }
+  }, [flaggedCells]);
 
   // Fonctions pour le mode spawn
   const activateSpawnMode = (team: 'red' | 'blue', troopType: TroopType) => {
@@ -294,14 +310,33 @@ export default function Arena() {
     }
   };
 
+  // Fonction de redémarrage du jeu
+  const handleRestart = () => {
+    resetGame();
+    // Redémarrer le jeu après un court délai
+    setTimeout(() => {
+      startGame();
+    }, 100);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${
+      isArenaVisible ? 'opacity-100' : 'opacity-0'
+    }`}>
       {/* Fond flou */}
       <img
         src="/images/backgrounds/arena_in_game.png"
         alt="Goal Background Blurred"
         className="absolute inset-0 w-full h-full object-cover blur-sm"
       />
+      
+      {/* Écran de fin de partie */}
+      {gameEnded && winner && (
+        <GameEndScreen 
+          winner={winner} 
+          onRestart={handleRestart}
+        />
+      )}
       
       {/* Container avec ratio 9/16 */}
       <div className="relative w-[56.25vh] h-screen max-w-full max-h-screen z-10">
@@ -312,7 +347,7 @@ export default function Arena() {
         />
 
         {/* Damier interactif */}
-        <div className="absolute inset-0 bg-black/20 pl-[12%] pr-[16.3%] pt-[44.3%] pb-[30.4%]">
+        <div className="absolute inset-0 pl-[12%] pr-[16.3%] pt-[44.3%] pb-[30.4%]">
           <div className={`w-full h-full grid gap-0`} style={{
             gridTemplateColumns: `repeat(${numCols}, 1fr)`,
             gridTemplateRows: `repeat(${numRows}, 1fr)`
@@ -340,7 +375,7 @@ export default function Arena() {
               return (
                 <div
                   key={index}
-                  className={`w-full h-full transition-all duration-200 relative ${
+                  className={`w-full h-full transition-all duration-200 relative bg-transparent ${
                     spawnMode.active 
                       ? `cursor-crosshair ${
                           spawnMode.team === 'red' 
@@ -349,32 +384,37 @@ export default function Arena() {
                         }`
                       : 'cursor-pointer'
                   } ${
-                    highlightFlaggedCells && isFlagged
+                    showFlaggedCells && isFlagged 
                       ? 'bg-red-500/70 hover:bg-red-400/80 hover:ring-2 ring-red-300'
-                      : visbleGrid 
-                        ? (isEven 
-                            ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
-                            : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50')
-                        : 'hover:ring-2 ring-yellow-400 ring-opacity-50'
+                      : showGrid && isEven 
+                        ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
+                        : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
                   }`}
                   onClick={() => handleCellClick(row, col)}
                 >
-                  {towerImage && (
-                    <>
-                      <img
-                        src={towerImage}
-                        alt={tower?.name}
-                        className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
-                        style={{
-                          transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
-                        }}
-                      />
+                  {towerImage && (() => {
+                    // Vérifier si la tour est morte dans le GameEngine
+                    const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
+                    const isTowerDead = gameEngineTower && !gameEngineTower.isAlive;
+                    
+                    return !isTowerDead ? (
+                      <>
+                        <img
+                          src={towerImage}
+                          alt={tower?.name}
+                          className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
+                          style={{
+                            transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
+                          }}
+                        />
                       {/* Health Bar pour chaque tour */}
                       <div 
                         className="absolute z-20 pointer-events-none"
                         style={{
-                          left: `${(tower as any).offsetX - 20}px`,
-                          top: `${(tower as any).type === 'king' ? -60 : (tower as any).offsetY - 40}px`,
+                          left: `${(tower as any).offsetX - 16}px`,
+                          top: `${(tower as any).type === 'king' ? 
+                            ((tower as any).team === 'blue' ? +20 : -60) : 
+                            ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)}px`,
                         }}
                       >
                         {(() => {
@@ -393,8 +433,9 @@ export default function Arena() {
                           );
                         })()}
                       </div>
-                    </>
-                  )}
+                      </>
+                    ) : null;
+                  })()}
                   
                   {/* Rendu des troupes sur cette cellule */}
                   {troops
@@ -453,30 +494,6 @@ export default function Arena() {
 
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">
-          <div className="space-x-2">
-            <Link href="/">
-              <Button 
-                variant="secondary" 
-                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-              >
-                ← Retour au Menu
-              </Button>
-            </Link>
-            <Button 
-              variant="secondary" 
-              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-              onClick={() => setVisbleGrid(!visbleGrid)}
-            >
-              Visible Grid
-            </Button>
-            <Button 
-              variant="secondary" 
-              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-              onClick={() => setHighlightFlaggedCells(!highlightFlaggedCells)}
-            >
-              Highlight Flagged Cells
-            </Button>
-          </div>
           
           {/* Contrôles de jeu */}
           <div className="space-x-2">
@@ -520,46 +537,72 @@ export default function Arena() {
           
           {/* Spawn Troops */}
           {isGameRunning && (
-            <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               {!spawnMode.active ? (
                 <>
                   {/* Boutons pour Giants */}
-                  <div className="space-x-2">
-                    <Button 
-                      variant="secondary" 
-                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                      onClick={() => activateSpawnMode('red', TroopType.GIANT)}
-                    >
-                      Spawn Red Giant
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                      onClick={() => activateSpawnMode('blue', TroopType.GIANT)}
-                    >
-                      Spawn Blue Giant
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('red', TroopType.GIANT)}
+                  >
+                    Red Giant
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('blue', TroopType.GIANT)}
+                  >
+                    Blue Giant
+                  </Button>
                   {/* Boutons pour Baby Dragons */}
-                  <div className="space-x-2">
-                    <Button 
-                      variant="secondary" 
-                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                      onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
-                    >
-                      Spawn Red Dragon
-                    </Button>
-                    <Button 
-                      variant="secondary" 
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                      onClick={() => activateSpawnMode('blue', TroopType.BABY_DRAGON)}
-                    >
-                      Spawn Blue Dragon
-                    </Button>
-                  </div>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
+                  >
+                    Red Dragon
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('blue', TroopType.BABY_DRAGON)}
+                  >
+                    Blue Dragon
+                  </Button>
+                  {/* Boutons pour Mini Pekkas */}
+                  <Button 
+                    variant="secondary" 
+                    className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('red', TroopType.MINI_PEKKA)}
+                  >
+                    Red MiniPekka
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('blue', TroopType.MINI_PEKKA)}
+                  >
+                    Blue MiniPekka
+                  </Button>
+                  {/* Boutons pour Valkyries */}
+                  <Button 
+                    variant="secondary" 
+                    className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('red', TroopType.VALKYRIE)}
+                  >
+                    Red Valkyrie
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('blue', TroopType.VALKYRIE)}
+                  >
+                    Blue Valkyrie
+                  </Button>
                 </>
               ) : (
-                <div className="flex items-center space-x-2">
+                <div className="col-span-2 flex items-center space-x-2">
                   <span className={`text-sm font-bold ${spawnMode.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
                     Click on a cell to spawn {spawnMode.team} {spawnMode.troopType}
                   </span>
@@ -575,19 +618,6 @@ export default function Arena() {
             </div>
           )}
         </div>
-        
-        {/* Stats du jeu */}
-        {isGameRunning && (
-          <div className="absolute top-4 right-4 z-10 bg-black/70 text-white p-4 rounded-lg">
-            <div className="text-sm space-y-1">
-              <div>Troops: {gameStats.livingTroops}/{gameStats.totalTroops}</div>
-              <div>Red: {gameStats.redTroops} | Blue: {gameStats.blueTroops}</div>
-              <div>Giants: {gameStats.livingGiants}/{gameStats.totalGiants}</div>
-              <div>Dragons: {gameStats.livingBabyDragons}/{gameStats.totalBabyDragons}</div>
-              <div>Time: {Math.floor(gameStats.gameTime)}s</div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -155,6 +155,16 @@ export class GiantEntity {
         }
         
         if (this.data.towerTarget) {
+          // Vérifier si la tour cible est toujours active
+          const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+          if (!targetTower || !targetTower.isAlive) {
+            console.log(`Giant ${this.data.id} target tower ${this.data.towerTarget} is dead or inactive, finding new target`);
+            this.data.towerTarget = undefined;
+            this.data.isInCombat = false;
+            this.findAndTargetEnemy(activeTowers);
+            break;
+          }
+          
           // Vérifier la distance à la tour cible AVANT de bouger
           const distanceToTower = this.getDistanceToTarget();
 
@@ -164,14 +174,37 @@ export class GiantEntity {
             this.data.isInCombat = true;
             this.data.state = GiantState.ATTACKING_TOWER;
           } else {
-            // Se déplacer vers la tour en vérifiant si on arrive à portée pendant le mouvement
-            this.moveTowardsWithRangeCheck(this.data.targetPosition, deltaTime, flaggedCells, 2.6);
+            // Vérifier si le Giant est bloqué par les flagged cells de sa cible
+            if (flaggedCells && this.isBlockedByTargetFlaggedCells(flaggedCells, targetTower)) {
+              console.log(`Giant ${this.data.id} is blocked by target's flagged cells, entering combat mode!`);
+              this.data.isInCombat = true;
+              this.data.state = GiantState.ATTACKING_TOWER;
+            } else {
+              // Se déplacer vers la tour en vérifiant si on arrive à portée pendant le mouvement
+              this.moveTowardsWithRangeCheck(this.data.targetPosition, deltaTime, flaggedCells, 2.6);
+            }
           }
         }
         break;
 
       case GiantState.ATTACKING_TOWER:
-        this.attackTower(deltaTime, activeTowers, gameEngine);
+        // Vérifier si la tour cible est toujours active avant d'attaquer
+        if (this.data.towerTarget) {
+          const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+          if (!targetTower || !targetTower.isAlive) {
+            console.log(`Giant ${this.data.id} target tower ${this.data.towerTarget} is dead or inactive during attack, switching to targeting mode`);
+            this.data.towerTarget = undefined;
+            this.data.isInCombat = false;
+            this.data.state = GiantState.TARGETING_TOWER;
+            break;
+          }
+        }
+        
+        // Vérifier si le Giant est bloqué par les flagged cells
+        const isBlockedByFlaggedCells = !!(flaggedCells && this.data.towerTarget && 
+          this.isBlockedByTargetFlaggedCells(flaggedCells, activeTowers.find(tower => tower.id === this.data.towerTarget)));
+        
+        this.attackTower(deltaTime, activeTowers, gameEngine, isBlockedByFlaggedCells);
         break;
     }
   }
@@ -494,7 +527,7 @@ export class GiantEntity {
     };
   }
 
-  private attackTower(deltaTime: number, activeTowers: any[], gameEngine?: any): void {
+  private attackTower(deltaTime: number, activeTowers: any[], gameEngine?: any, isBlockedByFlaggedCells?: boolean): void {
     if (!this.data.towerTarget) {
       console.log(`Giant ${this.data.id} has no tower target in combat mode!`);
       return;
@@ -519,12 +552,12 @@ export class GiantEntity {
       return;
     }
 
-    // Vérifier si la tour est toujours à portée
+    // Vérifier si la tour est toujours à portée (sauf si bloqué par flagged cells)
     const distanceToTower = this.getDistanceToTarget();
     const attackRange = 2.6;
 
-    if (distanceToTower > attackRange) {
-      // Cible trop loin, revenir en mode poursuite
+    if (!isBlockedByFlaggedCells && distanceToTower > attackRange) {
+      // Cible trop loin, revenir en mode poursuite (seulement si pas bloqué)
       console.log(`Giant ${this.data.id} target too far (${distanceToTower.toFixed(2)}), switching back to targeting mode`);
       this.data.state = GiantState.TARGETING_TOWER;
       this.data.isInCombat = false;
@@ -561,5 +594,28 @@ export class GiantEntity {
     } else {
       console.warn(`Target ${targetTower.id} doesn't have takeDamage method! Type: ${typeof targetTower}, Keys: ${Object.keys(targetTower)}`);
     }
+  }
+
+  private isBlockedByTargetFlaggedCells(flaggedCells: Set<string>, targetTower: any): boolean {
+    if (!flaggedCells || !targetTower) return false;
+    
+    // Vérifier si la position actuelle du Giant est une flagged cell de la tour cible
+    const currentCellKey = `${Math.floor(this.data.position.row)}-${Math.floor(this.data.position.col)}`;
+    
+    // Si le Giant est sur une flagged cell, c'est qu'il est bloqué par sa cible
+    if (flaggedCells.has(currentCellKey)) {
+      return true;
+    }
+    
+    // Vérifier aussi les cellules adjacentes pour être plus tolérant
+    const adjacentCells = [
+      `${Math.floor(this.data.position.row - 1)}-${Math.floor(this.data.position.col)}`,
+      `${Math.floor(this.data.position.row + 1)}-${Math.floor(this.data.position.col)}`,
+      `${Math.floor(this.data.position.row)}-${Math.floor(this.data.position.col - 1)}`,
+      `${Math.floor(this.data.position.row)}-${Math.floor(this.data.position.col + 1)}`
+    ];
+    
+    // Si le Giant est à côté d'une flagged cell, il est probablement bloqué
+    return adjacentCells.some(cellKey => flaggedCells.has(cellKey));
   }
 }

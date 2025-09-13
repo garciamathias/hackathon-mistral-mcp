@@ -1,5 +1,7 @@
 import { GiantEntity, Giant } from './troops/Giant';
 import { BabyDragonEntity, BabyDragon } from './troops/BabyDragon';
+import { MiniPekkaEntity, MiniPekka } from './troops/MiniPekka';
+import { ValkyrieEntity, Valkyrie } from './troops/Valkyrie';
 import { BaseTroop, TroopEntity, TroopType } from './types/Troop';
 import { TowerEntity, Tower } from './types/Tower';
 
@@ -16,6 +18,7 @@ export class GameEngine {
   private gameState: GameState;
   private animationFrameId: number | null = null;
   private onUpdateCallback?: (troops: BaseTroop[]) => void;
+  private onGameEndCallback?: (winner: 'red' | 'blue') => void;
 
   constructor() {
     this.gameState = {
@@ -60,6 +63,12 @@ export class GameEngine {
     this.towers.clear();
   }
 
+  public reset(): void {
+    this.stop();
+    this.gameState.gameTime = 0;
+    this.gameState.lastUpdateTime = 0;
+  }
+
   // Méthodes génériques pour les troupes
   public spawnTroop(type: TroopType, team: 'red' | 'blue', row?: number, col?: number): string {
     const id = `${type}_${team}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -75,6 +84,16 @@ export class GameEngine {
         troop = row !== undefined && col !== undefined 
           ? new BabyDragonEntity(id, team, { row, col }) as unknown as TroopEntity
           : new BabyDragonEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.MINI_PEKKA:
+        troop = row !== undefined && col !== undefined 
+          ? new MiniPekkaEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new MiniPekkaEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.VALKYRIE:
+        troop = row !== undefined && col !== undefined 
+          ? new ValkyrieEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new ValkyrieEntity(id, team) as unknown as TroopEntity;
         break;
       default:
         throw new Error(`Unknown troop type: ${type}`);
@@ -96,6 +115,14 @@ export class GameEngine {
 
   public spawnBabyDragon(team: 'red' | 'blue', row: number, col: number): string {
     return this.spawnTroop(TroopType.BABY_DRAGON, team, row, col);
+  }
+
+  public spawnMiniPekka(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.MINI_PEKKA, team, row, col);
+  }
+
+  public spawnValkyrie(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.VALKYRIE, team, row, col);
   }
 
   public removeTroop(id: string): void {
@@ -160,12 +187,36 @@ export class GameEngine {
     return this.getTroopsByType(TroopType.BABY_DRAGON) as unknown as BabyDragon[];
   }
 
+  public getAllMiniPekkas(): MiniPekka[] {
+    return this.getTroopsByType(TroopType.MINI_PEKKA) as unknown as MiniPekka[];
+  }
+
+  public getAllValkyries(): Valkyrie[] {
+    return this.getTroopsByType(TroopType.VALKYRIE) as unknown as Valkyrie[];
+  }
+
   public getLivingGiants(): Giant[] {
     return this.getAllGiants().filter(giant => giant.isAlive);
   }
 
+  public getLivingBabyDragons(): BabyDragon[] {
+    return this.getAllBabyDragons().filter(dragon => dragon.isAlive);
+  }
+
+  public getLivingMiniPekkas(): MiniPekka[] {
+    return this.getAllMiniPekkas().filter(pekka => pekka.isAlive);
+  }
+
+  public getLivingValkyries(): Valkyrie[] {
+    return this.getAllValkyries().filter(valkyrie => valkyrie.isAlive);
+  }
+
   public setOnUpdateCallback(callback: (troops: BaseTroop[]) => void): void {
     this.onUpdateCallback = callback;
+  }
+
+  public setOnGameEndCallback(callback: (winner: 'red' | 'blue') => void): void {
+    this.onGameEndCallback = callback;
   }
 
   private gameLoop = (): void => {
@@ -196,6 +247,9 @@ export class GameEngine {
       troop.update(deltaTime, activeTowers, flaggedCells, this);
     }
 
+    // Vérifier la fin de partie
+    this.checkGameEnd();
+
     // Notifier les composants React
     if (this.onUpdateCallback) {
       this.onUpdateCallback(this.getAllTroops());
@@ -209,6 +263,36 @@ export class GameEngine {
     
     for (const id of deadTroops) {
       this.troops.delete(id);
+    }
+  }
+
+  private checkGameEnd(): void {
+    // Vérifier si une King Tower est détruite
+    const kingRed = this.towers.get('king_red');
+    const kingBlue = this.towers.get('king_blue');
+    
+    if (kingRed && !kingRed.data.isAlive) {
+      // King Rouge détruite → Bleu gagne
+      console.log('Game Over: Blue team wins! King Red destroyed');
+      this.endGame('blue');
+    } else if (kingBlue && !kingBlue.data.isAlive) {
+      // King Bleue détruite → Rouge gagne
+      console.log('Game Over: Red team wins! King Blue destroyed');
+      this.endGame('red');
+    }
+  }
+
+  private endGame(winner: 'red' | 'blue'): void {
+    this.gameState.isRunning = false;
+    
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    // Notifier la fin de partie
+    if (this.onGameEndCallback) {
+      this.onGameEndCallback(winner);
     }
   }
 
@@ -272,6 +356,8 @@ export class GameEngine {
     const livingTroops = this.getLivingTroops();
     const giants = this.getAllGiants();
     const babyDragons = this.getAllBabyDragons();
+    const miniPekkas = this.getAllMiniPekkas();
+    const valkyries = this.getAllValkyries();
     
     return {
       totalTroops: allTroops.length,
@@ -287,6 +373,14 @@ export class GameEngine {
       livingBabyDragons: babyDragons.filter(d => d.isAlive).length,
       redBabyDragons: babyDragons.filter(d => d.team === 'red').length,
       blueBabyDragons: babyDragons.filter(d => d.team === 'blue').length,
+      totalMiniPekkas: miniPekkas.length,
+      livingMiniPekkas: miniPekkas.filter(p => p.isAlive).length,
+      redMiniPekkas: miniPekkas.filter(p => p.team === 'red').length,
+      blueMiniPekkas: miniPekkas.filter(p => p.team === 'blue').length,
+      totalValkyries: valkyries.length,
+      livingValkyries: valkyries.filter(v => v.isAlive).length,
+      redValkyries: valkyries.filter(v => v.team === 'red').length,
+      blueValkyries: valkyries.filter(v => v.team === 'blue').length,
       // État du jeu
       gameTime: this.gameState.gameTime,
       isRunning: this.gameState.isRunning,

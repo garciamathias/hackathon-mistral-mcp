@@ -124,18 +124,35 @@ export class TroopUtils {
     const isOnOwnSide = TroopUtils.isOnOwnSide(troop);
     
     if (isOnOwnSide) {
-      // Sur son propre côté : comparer la distance entre l'ennemi le plus proche et le pont
+      // Sur son propre côté : vérifier si l'ennemi le plus proche est du même côté ou de l'autre côté
       if (gameEngine) {
         const closestEnemyResult = gameEngine.findClosestEnemy(troop);
         const distanceToBridge = TroopUtils.getDistanceToBridge(troop);
         
-        if (closestEnemyResult && closestEnemyResult.distance < distanceToBridge) {
-          // L'ennemi est plus proche que le pont, aller directement vers lui
-          console.log(`${troop.type} ${troop.id} - enemy closer than bridge, targeting enemy directly`);
-          return TroopState.TARGETING_TOWER;
+        if (closestEnemyResult) {
+          const enemy = closestEnemyResult.target;
+          let enemyPosition: Position;
+          
+          if (enemy.type === 'tower') {
+            enemyPosition = { row: enemy.row || 0, col: enemy.col || 0 };
+          } else {
+            enemyPosition = enemy.position || { row: 0, col: 0 };
+          }
+          
+          const isEnemyOnSameSide = TroopUtils.isPositionOnSameSide(enemyPosition, troop.team);
+          
+          if (isEnemyOnSameSide && closestEnemyResult.distance < distanceToBridge) {
+            // L'ennemi est sur le même côté et plus proche que le pont, aller directement vers lui
+            console.log(`${troop.type} ${troop.id} - enemy on same side and closer than bridge, targeting enemy directly`);
+            return TroopState.TARGETING_TOWER;
+          } else {
+            // L'ennemi est de l'autre côté ou le pont est plus proche, aller au pont d'abord
+            console.log(`${troop.type} ${troop.id} - enemy on opposite side or bridge closer, going to bridge first`);
+            return TroopState.MOVING_TO_BRIDGE;
+          }
         } else {
-          // Le pont est plus proche, aller au pont d'abord
-          console.log(`${troop.type} ${troop.id} - bridge closer than enemy, going to bridge first`);
+          // Pas d'ennemi trouvé, aller au pont
+          console.log(`${troop.type} ${troop.id} - no enemy found, going to bridge`);
           return TroopState.MOVING_TO_BRIDGE;
         }
       } else {
@@ -146,6 +163,18 @@ export class TroopUtils {
       // Sur le côté adverse : aller vers l'ennemi le plus proche (troupe ou tour)
       console.log(`${troop.type} ${troop.id} - on opponent side, targeting closest enemy`);
       return TroopState.TARGETING_TOWER;
+    }
+  }
+
+  /**
+   * Vérifie si une position est du même côté que l'équipe donnée
+   */
+  static isPositionOnSameSide(position: Position, team: 'red' | 'blue'): boolean {
+    const frontierRow = 16;
+    if (team === 'blue') {
+      return position.row >= frontierRow; // Bleu commence en bas
+    } else {
+      return position.row <= frontierRow; // Rouge commence en haut
     }
   }
 
@@ -188,6 +217,30 @@ export class TroopUtils {
       }
       
       return TroopState.TARGETING_TOWER;
+    }
+    
+    // Pour les troupes non-focusOnBuildings, vérifier s'il y a un ennemi proche sur le même côté
+    if (!troop.focusOnBuildings && gameEngine) {
+      const closestEnemyResult = gameEngine.findClosestEnemy(troop);
+      if (closestEnemyResult) {
+        const enemy = closestEnemyResult.target;
+        let enemyPosition: Position;
+        
+        if (enemy.type === 'tower') {
+          enemyPosition = { row: enemy.row || 0, col: enemy.col || 0 };
+        } else {
+          enemyPosition = enemy.position || { row: 0, col: 0 };
+        }
+        
+        const isEnemyOnSameSide = TroopUtils.isPositionOnSameSide(enemyPosition, troop.team);
+        const distanceToBridge = TroopUtils.getDistanceToTarget(troop);
+        
+        // Si l'ennemi est sur le même côté et beaucoup plus proche que le pont, l'intercepter
+        if (isEnemyOnSameSide && closestEnemyResult.distance < distanceToBridge * 0.5) {
+          console.log(`${troop.type} ${troop.id} - intercepting close enemy on same side while going to bridge`);
+          return TroopState.TARGETING_TOWER;
+        }
+      }
     }
     
     if (moveTowardsCallback) {

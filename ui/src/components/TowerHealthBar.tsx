@@ -30,7 +30,7 @@ export default function TowerHealthBar({
       </span>
 
       {/* Barre de vie - plus petite */}
-      <div className="relative w-16 h-2.5 bg-black rounded-sm overflow-hidden"
+      <div className="relative w-14.5 h-2.5 bg-black rounded-sm overflow-hidden"
            style={{
              outline: '1px solid black',
              marginTop: '8px'

@@ -106,6 +106,32 @@ export class BabyDragonEntity {
           this.findAndTargetEnemy(activeTowers, gameEngine);
         }
         
+        // Vérifier si la cible actuelle est toujours active
+        if (this.data.towerTarget) {
+          // D'abord vérifier si c'est une tour
+          const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+          if (targetTower) {
+            // C'est une tour, vérifier qu'elle est toujours active
+            if (!targetTower.isAlive) {
+              console.log(`BabyDragon ${this.data.id} target tower ${this.data.towerTarget} is dead, finding new target`);
+              this.data.towerTarget = undefined;
+              this.data.isInCombat = false;
+              this.findAndTargetEnemy(activeTowers, gameEngine);
+              break;
+            }
+          } else if (gameEngine) {
+            // Ce n'est pas une tour, vérifier si c'est une troupe vivante
+            const targetTroop = gameEngine.getTroopEntity(this.data.towerTarget);
+            if (!targetTroop || !targetTroop.data.isAlive) {
+              console.log(`BabyDragon ${this.data.id} target troop ${this.data.towerTarget} is dead, finding new target`);
+              this.data.towerTarget = undefined;
+              this.data.isInCombat = false;
+              this.findAndTargetEnemy(activeTowers, gameEngine);
+              break;
+            }
+          }
+        }
+        
         // Mettre à jour la position de la cible actuelle (importante pour les cibles mobiles)
         if (this.data.towerTarget && gameEngine) {
           this.updateTargetPosition(activeTowers, gameEngine);
@@ -146,6 +172,32 @@ export class BabyDragonEntity {
         break;
 
       case BabyDragonState.ATTACKING_TARGET:
+        // Vérifier si la cible est toujours active avant d'attaquer
+        if (this.data.towerTarget) {
+          // D'abord vérifier si c'est une tour
+          const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+          if (targetTower) {
+            // C'est une tour, vérifier qu'elle est toujours active
+            if (!targetTower.isAlive) {
+              console.log(`BabyDragon ${this.data.id} target tower ${this.data.towerTarget} is dead during attack, switching to seeking mode`);
+              this.data.towerTarget = undefined;
+              this.data.isInCombat = false;
+              this.data.state = BabyDragonState.SEEKING_TARGET;
+              break;
+            }
+          } else if (gameEngine) {
+            // Ce n'est pas une tour, vérifier si c'est une troupe vivante
+            const targetTroop = gameEngine.getTroopEntity(this.data.towerTarget);
+            if (!targetTroop || !targetTroop.data.isAlive) {
+              console.log(`BabyDragon ${this.data.id} target troop ${this.data.towerTarget} is dead during attack, switching to seeking mode`);
+              this.data.towerTarget = undefined;
+              this.data.isInCombat = false;
+              this.data.state = BabyDragonState.SEEKING_TARGET;
+              break;
+            }
+          }
+        }
+        
         // Mettre à jour la position de la cible même en combat (pour les cibles mobiles)
         if (this.data.towerTarget && gameEngine) {
           this.updateTargetPosition(activeTowers, gameEngine);
@@ -376,7 +428,7 @@ export class BabyDragonEntity {
     let target = null;
     if (gameEngine) {
       const towerEntity = gameEngine.getTowerEntity(this.data.towerTarget);
-      if (towerEntity) {
+      if (towerEntity && towerEntity.data.isAlive) {
         target = { ...towerEntity.data, type: 'tower' };
       }
     }
