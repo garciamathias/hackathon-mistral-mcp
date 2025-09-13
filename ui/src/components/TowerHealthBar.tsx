@@ -10,7 +10,6 @@ interface TowerHealthBarProps {
 export default function TowerHealthBar({
   currentHealth,
   maxHealth,
-  isKing = false,
   team
 }: TowerHealthBarProps) {
   const healthPercentage = (currentHealth / maxHealth) * 100;

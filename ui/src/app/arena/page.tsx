@@ -427,7 +427,6 @@ export default function Arena() {
                             <TowerHealthBar
                               currentHealth={currentHealth}
                               maxHealth={maxHealth}
-                              isKing={tower?.type === 'king'}
                               team={(tower?.team as 'red' | 'blue') || 'red'}
                             />
                           );
@@ -490,6 +489,101 @@ export default function Arena() {
         {/* Timer du jeu */}
         <div className=" absolute top-4 right-4 z-10">
           <ClashTimer />
+        </div>
+
+        {/* Barre de cartes en bas */}
+        <div className="absolute bottom-0 left-0 right-0 z-10">
+          <div className="relative">
+            <img
+              src="/images/cards/more/card_box.png"
+              alt="Card Box"
+              className="w-full h-38 object-fill"
+            />
+            
+            {/* Message de spawn mode */}
+            {spawnMode.active && (
+              <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-black/80 text-white text-sm px-3 py-1 rounded-lg whitespace-nowrap">
+                Click on the battlefield to spawn {spawnMode.troopType}
+                <button 
+                  onClick={deactivateSpawnMode}
+                  className="ml-2 text-red-400 hover:text-red-300 font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            
+            {/* Cartes de troupes */}
+            <div className="absolute inset-0 flex items-center justify-center space-x-6 px-8">
+              {/* Baby Dragon Card */}
+              <button
+                className={`w-16 h-20 hover:scale-110 transition-all duration-200 hover:z-20 relative ${
+                  spawnMode.active && spawnMode.troopType === TroopType.BABY_DRAGON 
+                    ? 'scale-110 ring-2 ring-yellow-400 ring-opacity-80' 
+                    : ''
+                } ${!isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
+                disabled={!isGameRunning}
+              >
+                <img
+                  src="/images/cards/more/BabyDragonCard.png"
+                  alt="Baby Dragon"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+              </button>
+
+              {/* Mini PEKKA Card */}
+              <button
+                className={`w-16 h-20 hover:scale-110 transition-all duration-200 hover:z-20 relative ${
+                  spawnMode.active && spawnMode.troopType === TroopType.MINI_PEKKA 
+                    ? 'scale-110 ring-2 ring-yellow-400 ring-opacity-80' 
+                    : ''
+                } ${!isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => activateSpawnMode('red', TroopType.MINI_PEKKA)}
+                disabled={!isGameRunning}
+              >
+                <img
+                  src="/images/cards/more/MiniPEKKACard.png"
+                  alt="Mini PEKKA"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+              </button>
+
+              {/* Giant Card */}
+              <button
+                className={`w-16 h-20 hover:scale-110 transition-all duration-200 hover:z-20 relative ${
+                  spawnMode.active && spawnMode.troopType === TroopType.GIANT 
+                    ? 'scale-110 ring-2 ring-yellow-400 ring-opacity-80' 
+                    : ''
+                } ${!isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => activateSpawnMode('red', TroopType.GIANT)}
+                disabled={!isGameRunning}
+              >
+                <img
+                  src="/images/cards/more/GiantCard.png"
+                  alt="Giant"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+              </button>
+
+              {/* Valkyrie Card */}
+              <button
+                className={`w-16 h-20 hover:scale-110 transition-all duration-200 hover:z-20 relative ${
+                  spawnMode.active && spawnMode.troopType === TroopType.VALKYRIE 
+                    ? 'scale-110 ring-2 ring-yellow-400 ring-opacity-80' 
+                    : ''
+                } ${!isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => activateSpawnMode('red', TroopType.VALKYRIE)}
+                disabled={!isGameRunning}
+              >
+                <img
+                  src="/images/cards/more/VarlkyrieCard.png"
+                  alt="Valkyrie"
+                  className="w-full h-full object-contain drop-shadow-lg"
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Contrôles du jeu */}
