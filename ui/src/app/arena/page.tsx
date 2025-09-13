@@ -15,11 +15,8 @@ export default function Arena() {
   const numRows = 34;
   const numCols = 18;
 
-  const [spawnMode, setSpawnMode] = useState<{active: boolean, team: 'red' | 'blue' | null, troopType: TroopType | null}>({
-    active: false,
-    team: null,
-    troopType: null
-  });
+  const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
+  const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
 
   const isArenaVisible = true; // L'arène est immédiatement visible pour éviter les délais de transition
    
@@ -261,22 +258,29 @@ export default function Arena() {
     }
   }, [flaggedCells]);
 
-  // Fonctions pour le mode spawn
-  const activateSpawnMode = (team: 'red' | 'blue', troopType: TroopType) => {
-    setSpawnMode({ active: true, team, troopType });
+  // Fonctions pour le drag and drop
+  const handleCardDragStart = (troopType: TroopType) => {
+    setDraggedCard({ troopType, team: currentTeam });
   };
 
-  const deactivateSpawnMode = () => {
-    setSpawnMode({ active: false, team: null, troopType: null });
+  const handleCardDragEnd = () => {
+    setDraggedCard(null);
   };
 
-  const handleCellClick = (row: number, col: number) => {
-    if (spawnMode.active && spawnMode.team && spawnMode.troopType && isGameRunning) {
-      spawnTroop(spawnMode.troopType, spawnMode.team, row, col);
-      deactivateSpawnMode();
-    } else {
-      console.log(`Cell ${row}, ${col}`);
+  const handleCellDrop = (row: number, col: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedCard && isGameRunning) {
+      spawnTroop(draggedCard.troopType, draggedCard.team, row, col);
+      setDraggedCard(null);
     }
+  };
+
+  const handleCellDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const switchTeam = () => {
+    setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
   };
 
   // Fonction pour obtenir le GIF path d'une troupe
@@ -372,19 +376,20 @@ export default function Arena() {
                   key={index}
                   className={`w-full h-full transition-all duration-200 relative ${!showGrid ? 'bg-transparent' : 'bg-black/20'}
                       ${
-                    spawnMode.active 
-                      ? `cursor-crosshair ${
-                          spawnMode.team === 'red' 
-                            ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' 
-                            : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'
-                        }`
-                      : 'cursor-pointer'
-                  } ${
-                    isEven 
-                        ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
-                        : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
-                  }`}
-                  onClick={() => handleCellClick(row, col)}
+                     draggedCard 
+                       ? `cursor-crosshair ${
+                           draggedCard.team === 'red' 
+                             ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' 
+                             : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'
+                         }`
+                       : 'cursor-default'
+                   } ${
+                     isEven 
+                         ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
+                         : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                   }`}
+                   onDrop={(e) => handleCellDrop(row, col, e)}
+                   onDragOver={handleCellDragOver}
                 >
                   {towerImage && (() => {
                     // Vérifier si la tour est morte dans le GameEngine
@@ -499,64 +504,68 @@ export default function Arena() {
                 {/* Grid de cartes */}
                 <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
                   {/* Baby Dragon Card */}
-                  <button
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                  <div
+                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
                     }`}
-                    onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
-                    disabled={!isGameRunning}
+                    draggable={isGameRunning}
+                    onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
+                    onDragEnd={handleCardDragEnd}
                   >
                     <img
                       src="/images/cards/more/BabyDragonCard.png"
-                      alt="Baby Dragon"
-                      className="w-full h-full object-contain drop-shadow-lg"
+                      alt={`${currentTeam} Baby Dragon`}
+                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
                     />
-                  </button>
+                  </div>
 
                   {/* Mini PEKKA Card */}
-                  <button
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                  <div
+                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
                     }`}
-                    onClick={() => activateSpawnMode('red', TroopType.MINI_PEKKA)}
-                    disabled={!isGameRunning}
+                    draggable={isGameRunning}
+                    onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
+                    onDragEnd={handleCardDragEnd}
                   >
                     <img
                       src="/images/cards/more/MiniPEKKACard.png"
-                      alt="Mini PEKKA"
-                      className="w-full h-full object-contain drop-shadow-lg"
+                      alt={`${currentTeam} Mini PEKKA`}
+                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
                     />
-                  </button>
+                  </div>
 
                   {/* Giant Card */}
-                  <button
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                  <div
+                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
                     }`}
-                    onClick={() => activateSpawnMode('red', TroopType.GIANT)}
-                    disabled={!isGameRunning}
+                    draggable={isGameRunning}
+                    onDragStart={() => handleCardDragStart(TroopType.GIANT)}
+                    onDragEnd={handleCardDragEnd}
                   >
                     <img
                       src="/images/cards/more/GiantCard.png"
-                      alt="Giant"
-                      className="w-full h-full object-contain drop-shadow-lg"
+                      alt={`${currentTeam} Giant`}
+                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
                     />
-                  </button>
+                  </div>
 
                   {/* Valkyrie Card */}
-                  <button
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                  <div
+                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
                     }`}
-                    onClick={() => activateSpawnMode('red', TroopType.VALKYRIE)}
-                    disabled={!isGameRunning}
+                    draggable={isGameRunning}
+                    onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
+                    onDragEnd={handleCardDragEnd}
                   >
                     <img
                       src="/images/cards/more/ValkyrieCard.png"
-                      alt="Valkyrie"
-                      className="w-full h-full object-contain drop-shadow-lg"
+                      alt={`${currentTeam} Valkyrie`}
+                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
                     />
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -565,6 +574,18 @@ export default function Arena() {
 
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">
+          {/* Bouton pour switcher d'équipe */}
+          <Button 
+            variant="secondary" 
+            className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
+              currentTeam === 'red' 
+                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+            onClick={switchTeam}
+          >
+            Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
+          </Button>
           
           {/* Contrôles de jeu */}
           <div className="space-x-2">
@@ -606,88 +627,19 @@ export default function Arena() {
             )}
           </div>
           
-          {/* Spawn Troops */}
-          {isGameRunning && (
-            <div className="grid grid-cols-2 gap-2">
-              {!spawnMode.active ? (
-                <>
-                  {/* Boutons pour Giants */}
-                  <Button 
-                    variant="secondary" 
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('red', TroopType.GIANT)}
-                  >
-                    Red Giant
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('blue', TroopType.GIANT)}
-                  >
-                    Blue Giant
-                  </Button>
-                  {/* Boutons pour Baby Dragons */}
-                  <Button 
-                    variant="secondary" 
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
-                  >
-                    Red Dragon
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('blue', TroopType.BABY_DRAGON)}
-                  >
-                    Blue Dragon
-                  </Button>
-                  {/* Boutons pour Mini Pekkas */}
-                  <Button 
-                    variant="secondary" 
-                    className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('red', TroopType.MINI_PEKKA)}
-                  >
-                    Red MiniPekka
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('blue', TroopType.MINI_PEKKA)}
-                  >
-                    Blue MiniPekka
-                  </Button>
-                  {/* Boutons pour Valkyries */}
-                  <Button 
-                    variant="secondary" 
-                    className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('red', TroopType.VALKYRIE)}
-                  >
-                    Red Valkyrie
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-blue-800 hover:bg-blue-900 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('blue', TroopType.VALKYRIE)}
-                  >
-                    Blue Valkyrie
-                  </Button>
-                </>
-              ) : (
-                <div className="col-span-2 flex items-center space-x-2">
-                  <span className={`text-sm font-bold ${spawnMode.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
-                    Click on a cell to spawn {spawnMode.team} {spawnMode.troopType}
-                  </span>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded transition-colors duration-200"
-                    onClick={deactivateSpawnMode}
-                  >
-                    Cancel
-                  </Button>
+            {/* Instructions pour le drag and drop */}
+            {isGameRunning && (
+              <div className="text-center">
+                <div className="bg-black/50 rounded-lg p-3 border border-white/20">
+                  <p className="text-white text-sm font-medium">
+                    Drag cards from the bottom to spawn {currentTeam} troops
+                  </p>
+                  <p className="text-gray-300 text-xs mt-1">
+                    Switch team with the button above
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
         </div>
       </div>
   );
