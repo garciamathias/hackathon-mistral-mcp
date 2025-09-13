@@ -11,7 +11,8 @@ export interface BabyDragonPosition {
   col: number;
 }
 
-import { TroopType } from '../types/Troop';
+import { TroopType, TROOP_CONFIGS, TroopState, BaseTroop } from '../types/Troop';
+import { TroopUtils } from '../utils/troop_utils';
 
 export interface BabyDragon {
   id: string;
@@ -30,6 +31,8 @@ export interface BabyDragon {
   attackDamage: number;
   attackSpeed: number; // attaques par seconde
   lastAttackTime: number;
+  flying: boolean;
+  focusOnBuildings: boolean;
 }
 
 // Positions des ponts
@@ -44,6 +47,7 @@ export class BabyDragonEntity {
   constructor(id: string, team: 'red' | 'blue', customPosition?: BabyDragonPosition) {
     const defaultPosition = { row: 0, col: 0 };
     const startPosition = customPosition || defaultPosition;
+    const config = TROOP_CONFIGS[TroopType.BABY_DRAGON];
 
     this.data = {
       id,
@@ -52,16 +56,18 @@ export class BabyDragonEntity {
       position: { ...startPosition },
       targetPosition: { ...startPosition },
       state: BabyDragonState.SPAWNING,
-      health: 100,
-      maxHealth: 100,
-      speed: 1.5, // 1.5 cellules par seconde
+      health: config.maxHealth,
+      maxHealth: config.maxHealth,
+      speed: config.speed,
       isAlive: true,
       bridgeTarget: undefined,
       towerTarget: undefined,
       isInCombat: false,
-      attackDamage: 25,
-      attackSpeed: 1.0, // 1 attaque par seconde
-      lastAttackTime: -1 // -1 pour permettre la première attaque immédiatement
+      attackDamage: config.attackDamage,
+      attackSpeed: config.attackSpeed,
+      lastAttackTime: -1, // -1 pour permettre la première attaque immédiatement
+      flying: config.flying,
+      focusOnBuildings: config.focusOnBuildings
     };
 
     // Déterminer la stratégie de mouvement
@@ -69,53 +75,10 @@ export class BabyDragonEntity {
   }
 
   private chooseMovementStrategy(): void {
-    const { position, team } = this.data;
-    const frontierRow = 16; // Ligne frontière (ponts)
-    
-    console.log(`BabyDragon ${team} spawned at (${position.row}, ${position.col}), frontier: ${frontierRow}`);
-    
-    // Déterminer si le BabyDragon a besoin du pont
-    let needsBridge = false;
-    
-    if (team === 'blue') {
-      // Les bleus visent les tours rouges (en haut)
-      // Besoin du pont si spawn sous la frontière (row > 16)
-      needsBridge = position.row > frontierRow;
-    } else if (team === 'red') {
-      // Les rouges visent les tours bleues (en bas)
-      // Besoin du pont si spawn au-dessus de la frontière (row < 16)
-      needsBridge = position.row < frontierRow;
-    }
-    
-    console.log(`BabyDragon ${team} needs bridge: ${needsBridge}`);
-    
-    if (needsBridge) {
-      // Aller au pont le plus proche
-      console.log('Going to bridge');
-      this.chooseBridge();
-    } else {
-      // Aller directement vers une tour ennemie
-      console.log('Going directly to tower');
-      this.startTargetingTowerDirectly();
-    }
+    console.log(`BabyDragon ${this.data.team} spawned at (${this.data.position.row}, ${this.data.position.col}) - going directly to closest enemy`);
+    this.startTargetingTowerDirectly();
   }
 
-  private chooseBridge(): void {
-    const { position } = this.data;
-    
-    // Calculer la distance vers chaque pont
-    const distances = BRIDGES.map(bridge => {
-      const dx = bridge.col - position.col;
-      const dy = bridge.row - position.row;
-      return Math.sqrt(dx * dx + dy * dy);
-    });
-
-    // Choisir le pont le plus proche
-    const closestBridgeIndex = distances.indexOf(Math.min(...distances));
-    this.data.bridgeTarget = { ...BRIDGES[closestBridgeIndex] };
-    this.data.targetPosition = { ...this.data.bridgeTarget };
-    this.data.state = BabyDragonState.MOVING_TO_BRIDGE;
-  }
 
   private startTargetingTowerDirectly(): void {
     // Aller directement vers une tour ennemie sans passer par le pont
@@ -123,60 +86,46 @@ export class BabyDragonEntity {
     // La cible sera définie dans le premier update avec les tours actives
   }
 
-  public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>): void {
+    public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>, gameEngine?: any): void {
     if (!this.data.isAlive) return;
 
     switch (this.data.state) {
       case BabyDragonState.SPAWNING:
-        // Vérifier si le BabyDragon a déjà passé la frontière (pont)
-        const frontierRowAtSpawn = 16;
-        const hasCrossedFrontierAtSpawn = this.data.team === 'blue' ? 
-          this.data.position.row < frontierRowAtSpawn : // Bleu va vers le haut
-          this.data.position.row > frontierRowAtSpawn;  // Rouge va vers le bas
-
-        if (hasCrossedFrontierAtSpawn) {
-          console.log(`BabyDragon ${this.data.id} (${this.data.team}) has already crossed frontier at spawn, switching to tower targeting`);
-          this.data.state = BabyDragonState.TARGETING_TOWER;
-          break;
-        } else {
-          this.data.state = BabyDragonState.MOVING_TO_BRIDGE;
-          break;
-        }
+        // BabyDragons vont directement cibler l'ennemi le plus proche
+        this.data.state = BabyDragonState.TARGETING_TOWER;
+        break;
 
       case BabyDragonState.MOVING_TO_BRIDGE:
-        // Vérifier si le BabyDragon a déjà passé la frontière (pont)
-        const frontierRow = 16;
-        const hasCrossedFrontier = this.data.team === 'blue' ? 
-          this.data.position.row < frontierRow : // Bleu va vers le haut
-          this.data.position.row > frontierRow;  // Rouge va vers le bas
-        
-        if (hasCrossedFrontier) {
-          console.log(`BabyDragon ${this.data.id} (${this.data.team}) has already crossed frontier, switching to tower targeting`);
-          this.data.state = BabyDragonState.TARGETING_TOWER;
-          break;
-        }
-        
-        this.moveTowards(this.data.targetPosition, deltaTime, flaggedCells);
-        
-        // Vérifier si le pont est atteint
-        if (this.isAtPosition(this.data.targetPosition)) {
-          console.log(`BabyDragon ${this.data.id} (${this.data.team}) reached bridge, switching to tower targeting`);
-          this.data.state = BabyDragonState.TARGETING_TOWER;
-        }
+        // BabyDragons ne passent jamais par le pont (flying: true)
+        this.data.state = BabyDragonState.TARGETING_TOWER;
         break;
 
 
       case BabyDragonState.TARGETING_TOWER:
         // Si pas encore de cible définie, en trouver une
         if (!this.data.towerTarget) {
-          this.findAndTargetEnemyTower(activeTowers);
+          this.findAndTargetEnemy(activeTowers, gameEngine);
+        }
+        
+        // Recalculer périodiquement la cible la plus proche (focusOnBuildings: false)
+        if (gameEngine) {
+          const closestEnemyResult = gameEngine.findClosestEnemy(this.data);
+          if (closestEnemyResult && this.data.towerTarget !== closestEnemyResult.target.id) {
+            console.log(`BabyDragon ${this.data.id} retargeting from ${this.data.towerTarget} to closer enemy ${closestEnemyResult.target.id}`);
+            const { target } = closestEnemyResult;
+            this.data.towerTarget = target.id;
+            this.data.targetPosition = { 
+              row: target.type === 'tower' ? target.row : target.position.row, 
+              col: target.type === 'tower' ? target.col : target.position.col 
+            };
+          }
         }
         
         if (this.data.towerTarget) {
           // Vérifier la distance à la tour cible
           const distanceToTower = this.getDistanceToTarget();
           
-          if (distanceToTower <= (this.data.team === 'red' ? 2.6 : 2.0)) {
+          if (distanceToTower <= (this.data.team === 'red' ? 2.9 : 2.4)) {
             // À moins d'une case de la tour, passer en mode combat
             console.log(`BabyDragon ${this.data.id} entering combat mode! Distance: ${distanceToTower.toFixed(2)}`);
             this.data.isInCombat = true;
@@ -219,8 +168,8 @@ export class BabyDragonEntity {
       col: position.col + normalizedDx
     };
 
-    // Vérifier si la nouvelle position entre en collision avec une flagged cell
-    if (flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
+    // Vérifier si la nouvelle position entre en collision avec une flagged cell (seulement si pas volant)
+    if (!this.data.flying && flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
       console.log(`BabyDragon ${this.data.id} (${this.data.team}) blocked by flagged cell at (${Math.floor(newPosition.row)}, ${Math.floor(newPosition.col)})`);
       
       // Analyser le contournement intelligent
@@ -347,9 +296,23 @@ export class BabyDragonEntity {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-
-  private startTargetingTower(activeTowers: any[]): void {
-    this.findAndTargetEnemyTower(activeTowers);
+  private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
+    // BabyDragons ciblent toujours le plus proche (focusOnBuildings: false)
+    if (gameEngine) {
+      const closestEnemyResult = gameEngine.findClosestEnemy(this.data);
+      if (closestEnemyResult) {
+        const { target } = closestEnemyResult;
+        this.data.towerTarget = target.id;
+        this.data.targetPosition = { 
+          row: target.type === 'tower' ? target.row : target.position.row, 
+          col: target.type === 'tower' ? target.col : target.position.col 
+        };
+        console.log(`BabyDragon ${this.data.id} targeting closest enemy ${target.type} ${target.id}`);
+      }
+    } else {
+      // Fallback vers la logique originale si gameEngine n'est pas disponible
+      this.findAndTargetEnemyTower(activeTowers);
+    }
   }
 
   private findAndTargetEnemyTower(activeTowers: any[]): void {

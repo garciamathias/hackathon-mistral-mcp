@@ -33,11 +33,13 @@ export interface BaseTroop {
   attackDamage: number;
   attackSpeed: number; // attaques par seconde
   lastAttackTime: number;
+  focusOnBuildings: boolean;
+  flying: boolean;
 }
 
 export interface TroopEntity {
   data: BaseTroop;
-  update(deltaTime: number, towers: any[], flaggedCells: Set<string>): void;
+  update(deltaTime: number, towers: any[], flaggedCells: Set<string>, gameEngine?: any): void;
 }
 
 // Configuration pour chaque type de troupe
@@ -56,6 +58,8 @@ export interface TroopConfig {
       opponent: string;
     };
   };
+  focusOnBuildings: boolean;
+  flying: boolean;
   scale: number;
 }
 
@@ -75,6 +79,8 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
         opponent: '/images/troops/giant/Giant_fight_opponent.gif'
       }
     },
+    focusOnBuildings: true,
+    flying: false,
     scale: 3
   },
   [TroopType.BABY_DRAGON]: {
@@ -92,7 +98,9 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
         opponent: '/images/troops/babydragon/BabyDragon_fight_opponent.gif'
       }
     },
-    scale: 2.5
+    scale: 2.5,
+    focusOnBuildings: false, // Cible le plus proche (troupe ou tour)
+    flying: true // Ignore les flagged cells
   }
 };
 

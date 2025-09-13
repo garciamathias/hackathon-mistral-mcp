@@ -157,7 +157,7 @@ export class GameEngine {
     const flaggedCells = this.getFlaggedCells();
     
     for (const troop of this.troops.values()) {
-      troop.update(deltaTime, activeTowers, flaggedCells);
+      troop.update(deltaTime, activeTowers, flaggedCells, this);
     }
 
     // Notifier les composants React
@@ -195,6 +195,45 @@ export class GameEngine {
   public connectFlaggedCells(flaggedCells: Set<string>): void {
     // Méthode pour connecter les flagged cells depuis Arena
     this.getFlaggedCells = () => flaggedCells;
+  }
+
+  // Méthode pour trouver l'ennemi le plus proche (troupe ou tour)
+  public findClosestEnemy(troop: BaseTroop): { target: any, distance: number } | null {
+    const activeTowers = this.getActiveTowers();
+    const enemyTroops = this.getAllTroops().filter(t => 
+      t.team !== troop.team && t.isAlive
+    );
+
+    let closestTarget: any = null;
+    let closestDistance = Infinity;
+
+    // Vérifier les tours ennemies
+    activeTowers.forEach(tower => {
+      if (tower.team !== troop.team) {
+        const distance = Math.sqrt(
+          Math.pow(tower.row - troop.position.row, 2) +
+          Math.pow(tower.col - troop.position.col, 2)
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestTarget = { ...tower, type: 'tower' };
+        }
+      }
+    });
+
+    // Vérifier les troupes ennemies
+    enemyTroops.forEach(enemyTroop => {
+      const distance = Math.sqrt(
+        Math.pow(enemyTroop.position.row - troop.position.row, 2) +
+        Math.pow(enemyTroop.position.col - troop.position.col, 2)
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestTarget = { ...enemyTroop, type: 'troop' };
+      }
+    });
+
+    return closestTarget ? { target: closestTarget, distance: closestDistance } : null;
   }
 
   // Méthodes utilitaires pour les statistiques

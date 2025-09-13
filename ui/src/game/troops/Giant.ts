@@ -11,7 +11,8 @@ export interface GiantPosition {
   col: number;
 }
 
-import { TroopType } from '../types/Troop';
+import { TroopType, TROOP_CONFIGS, TroopState, BaseTroop } from '../types/Troop';
+import { TroopUtils } from '../utils/troop_utils';
 
 export interface Giant {
   id: string;
@@ -30,6 +31,8 @@ export interface Giant {
   attackDamage: number;
   attackSpeed: number; // attaques par seconde
   lastAttackTime: number;
+  flying: boolean;
+  focusOnBuildings: boolean;
 }
 
 // Positions des ponts
@@ -44,6 +47,7 @@ export class GiantEntity {
   constructor(id: string, team: 'red' | 'blue', customPosition?: GiantPosition) {
     const defaultPosition = { row: 0, col: 0 };
     const startPosition = customPosition || defaultPosition;
+    const config = TROOP_CONFIGS[TroopType.GIANT];
 
     this.data = {
       id,
@@ -52,16 +56,18 @@ export class GiantEntity {
       position: { ...startPosition },
       targetPosition: { ...startPosition },
       state: GiantState.SPAWNING,
-      health: 100,
-      maxHealth: 100,
-      speed: 1.5, // 1.5 cellules par seconde
+      health: config.maxHealth,
+      maxHealth: config.maxHealth,
+      speed: config.speed,
       isAlive: true,
       bridgeTarget: undefined,
       towerTarget: undefined,
       isInCombat: false,
-      attackDamage: 25,
-      attackSpeed: 1.0, // 1 attaque par seconde
-      lastAttackTime: -1 // -1 pour permettre la première attaque immédiatement
+      attackDamage: config.attackDamage,
+      attackSpeed: config.attackSpeed,
+      lastAttackTime: -1, // -1 pour permettre la première attaque immédiatement
+      flying: config.flying,
+      focusOnBuildings: config.focusOnBuildings
     };
 
     // Déterminer la stratégie de mouvement
@@ -101,20 +107,34 @@ export class GiantEntity {
   }
 
   private chooseBridge(): void {
-    const { position } = this.data;
-    
-    // Calculer la distance vers chaque pont
-    const distances = BRIDGES.map(bridge => {
-      const dx = bridge.col - position.col;
-      const dy = bridge.row - position.row;
-      return Math.sqrt(dx * dx + dy * dy);
-    });
-
-    // Choisir le pont le plus proche
-    const closestBridgeIndex = distances.indexOf(Math.min(...distances));
-    this.data.bridgeTarget = { ...BRIDGES[closestBridgeIndex] };
+    const closestBridge = TroopUtils.chooseBridge(this.getBaseTroopData());
+    this.data.bridgeTarget = { ...closestBridge };
     this.data.targetPosition = { ...this.data.bridgeTarget };
     this.data.state = GiantState.MOVING_TO_BRIDGE;
+  }
+
+  private getBaseTroopData(): BaseTroop {
+    return {
+      ...this.data,
+      state: this.mapGiantStateToTroopState(this.data.state)
+    } as BaseTroop;
+  }
+
+  private mapGiantStateToTroopState(giantState: GiantState): TroopState {
+    switch (giantState) {
+      case GiantState.SPAWNING:
+        return TroopState.SPAWNING;
+      case GiantState.MOVING_TO_BRIDGE:
+        return TroopState.MOVING_TO_BRIDGE;
+      case GiantState.TARGETING_TOWER:
+        return TroopState.TARGETING_TOWER;
+      case GiantState.ATTACKING_TOWER:
+        return TroopState.ATTACKING_TOWER;
+      case GiantState.DEAD:
+        return TroopState.DEAD;
+      default:
+        return TroopState.SPAWNING;
+    }
   }
 
   private startTargetingTowerDirectly(): void {
@@ -123,64 +143,32 @@ export class GiantEntity {
     // La cible sera définie dans le premier update avec les tours actives
   }
 
-  public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>): void {
+    public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>, gameEngine?: any): void {
     if (!this.data.isAlive) return;
 
 
     switch (this.data.state) {
       case GiantState.SPAWNING:
-        // Transition automatique vers le mouvement
-        console.log(`Giant ${this.data.id} (${this.data.team}) transitioning from SPAWNING to MOVING_TO_BRIDGE`);
-
-        // Vérifier si le Giant a déjà passé la frontière (pont)
-        const frontierRowAtSpawn = 16;
-        const hasCrossedFrontierAtSpawn = this.data.team === 'blue' ? 
-          this.data.position.row < frontierRowAtSpawn : // Bleu va vers le haut
-          this.data.position.row > frontierRowAtSpawn;  // Rouge va vers le bas
-
-        if (hasCrossedFrontierAtSpawn) {
-          console.log(`Giant ${this.data.id} (${this.data.team}) has already crossed frontier at spawn, switching to tower targeting`);
-          this.data.state = GiantState.TARGETING_TOWER;
-          break;
-        } else {
-          this.data.state = GiantState.MOVING_TO_BRIDGE;
-          break;
-        }
+        // Giants focusOnBuildings: true - la stratégie est déjà définie dans le constructeur
+        this.data.state = GiantState.TARGETING_TOWER;
+        break;
 
       case GiantState.MOVING_TO_BRIDGE:
-        // Vérifier si le Giant a déjà passé la frontière (pont)
-        const frontierRow = 16;
-        const hasCrossedFrontier = this.data.team === 'blue' ? 
-          this.data.position.row < frontierRow : // Bleu va vers le haut
-          this.data.position.row > frontierRow;  // Rouge va vers le bas
-        
-        if (hasCrossedFrontier) {
-          console.log(`Giant ${this.data.id} (${this.data.team}) has already crossed frontier, switching to tower targeting`);
-          this.data.state = GiantState.TARGETING_TOWER;
-          break;
-        }
-        
-        this.moveTowards(this.data.targetPosition, deltaTime, flaggedCells);
-        
-        // Vérifier si le pont est atteint
-        if (this.isAtPosition(this.data.targetPosition)) {
-          console.log(`Giant ${this.data.id} (${this.data.team}) reached bridge, switching to tower targeting`);
-          this.data.state = GiantState.TARGETING_TOWER;
-        }
+        this.handleMovingToBridge(deltaTime, flaggedCells, gameEngine);
         break;
 
 
       case GiantState.TARGETING_TOWER:
         // Si pas encore de cible définie, en trouver une
         if (!this.data.towerTarget) {
-          this.findAndTargetEnemyTower(activeTowers);
+          this.findAndTargetEnemy(activeTowers, gameEngine);
         }
         
         if (this.data.towerTarget) {
           // Vérifier la distance à la tour cible
           const distanceToTower = this.getDistanceToTarget();
 
-          if (distanceToTower <= (this.data.team === 'red' ? 2.6 : 2.0)) {
+          if (distanceToTower <= (this.data.team === 'red' ? 2.9 : 2.4)) {
             // À moins d'une case de la tour, passer en mode combat
             console.log(`Giant ${this.data.id} entering combat mode! Distance: ${distanceToTower.toFixed(2)}`);
             this.data.isInCombat = true;
@@ -223,8 +211,8 @@ export class GiantEntity {
       col: position.col + normalizedDx
     };
 
-    // Vérifier si la nouvelle position entre en collision avec une flagged cell
-    if (flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
+    // Vérifier si la nouvelle position entre en collision avec une flagged cell (seulement si pas volant)
+    if (!this.data.flying && flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
       console.log(`Giant ${this.data.id} (${this.data.team}) blocked by flagged cell at (${Math.floor(newPosition.row)}, ${Math.floor(newPosition.col)})`);
       
       // Analyser le contournement intelligent
@@ -346,13 +334,47 @@ export class GiantEntity {
   }
 
   private getDistanceToTarget(): number {
-    const dx = this.data.targetPosition.col - this.data.position.col;
-    const dy = this.data.targetPosition.row - this.data.position.row;
-    return Math.sqrt(dx * dx + dy * dy);
+    return TroopUtils.getDistanceToTarget(this.getBaseTroopData());
   }
 
 
   private startTargetingTower(activeTowers: any[]): void {
+    this.findAndTargetEnemyTower(activeTowers);
+  }
+
+
+  private mapTroopStateToGiantState(troopState: TroopState): GiantState {
+    switch (troopState) {
+      case TroopState.SPAWNING:
+        return GiantState.SPAWNING;
+      case TroopState.MOVING_TO_BRIDGE:
+        return GiantState.MOVING_TO_BRIDGE;
+      case TroopState.TARGETING_TOWER:
+        return GiantState.TARGETING_TOWER;
+      case TroopState.ATTACKING_TOWER:
+        return GiantState.ATTACKING_TOWER;
+      case TroopState.DEAD:
+        return GiantState.DEAD;
+      default:
+        return GiantState.SPAWNING;
+    }
+  }
+
+
+  private handleMovingToBridge(deltaTime: number, flaggedCells?: Set<string>, gameEngine?: any): void {
+    const newState = TroopUtils.handleMovingToBridge(
+      this.getBaseTroopData(),
+      deltaTime,
+      flaggedCells,
+      gameEngine,
+      (target, deltaTime, flaggedCells) => this.moveTowards(target, deltaTime, flaggedCells),
+      (target) => this.isAtPosition(target)
+    );
+    this.data.state = this.mapTroopStateToGiantState(newState);
+  }
+
+  private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
+    // Giants focusOnBuildings: true - ciblent toujours les tours
     this.findAndTargetEnemyTower(activeTowers);
   }
 
