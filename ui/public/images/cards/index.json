@@ -1,0 +1,1288 @@
+{
+  "cards": [
+    {
+      "id": 26000000,
+      "name": "Knight",
+      "sanitized_name": "knight",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000000_knight_common.png",
+        "evolution": "assets/cards/evolution/26000000_knight_common_evo.png"
+      }
+    },
+    {
+      "id": 26000001,
+      "name": "Archers",
+      "sanitized_name": "archers",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000001_archers_common.png",
+        "evolution": "assets/cards/evolution/26000001_archers_common_evo.png"
+      }
+    },
+    {
+      "id": 26000002,
+      "name": "Goblins",
+      "sanitized_name": "goblins",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000002_goblins_common.png"
+      }
+    },
+    {
+      "id": 26000003,
+      "name": "Giant",
+      "sanitized_name": "giant",
+      "rarity": "rare",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000003_giant_rare.png"
+      }
+    },
+    {
+      "id": 26000004,
+      "name": "P.E.K.K.A",
+      "sanitized_name": "pekka",
+      "rarity": "epic",
+      "elixir_cost": 7,
+      "files": {
+        "normal": "assets/cards/normal/26000004_pekka_epic.png",
+        "evolution": "assets/cards/evolution/26000004_pekka_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000005,
+      "name": "Minions",
+      "sanitized_name": "minions",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000005_minions_common.png"
+      }
+    },
+    {
+      "id": 26000006,
+      "name": "Balloon",
+      "sanitized_name": "balloon",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000006_balloon_epic.png"
+      }
+    },
+    {
+      "id": 26000007,
+      "name": "Witch",
+      "sanitized_name": "witch",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000007_witch_epic.png",
+        "evolution": "assets/cards/evolution/26000007_witch_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000008,
+      "name": "Barbarians",
+      "sanitized_name": "barbarians",
+      "rarity": "common",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000008_barbarians_common.png",
+        "evolution": "assets/cards/evolution/26000008_barbarians_common_evo.png"
+      }
+    },
+    {
+      "id": 26000009,
+      "name": "Golem",
+      "sanitized_name": "golem",
+      "rarity": "epic",
+      "elixir_cost": 8,
+      "files": {
+        "normal": "assets/cards/normal/26000009_golem_epic.png"
+      }
+    },
+    {
+      "id": 26000010,
+      "name": "Skeletons",
+      "sanitized_name": "skeletons",
+      "rarity": "common",
+      "elixir_cost": 1,
+      "files": {
+        "normal": "assets/cards/normal/26000010_skeletons_common.png",
+        "evolution": "assets/cards/evolution/26000010_skeletons_common_evo.png"
+      }
+    },
+    {
+      "id": 26000011,
+      "name": "Valkyrie",
+      "sanitized_name": "valkyrie",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000011_valkyrie_rare.png",
+        "evolution": "assets/cards/evolution/26000011_valkyrie_rare_evo.png"
+      }
+    },
+    {
+      "id": 26000012,
+      "name": "Skeleton Army",
+      "sanitized_name": "skeleton_army",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000012_skeleton_army_epic.png"
+      }
+    },
+    {
+      "id": 26000013,
+      "name": "Bomber",
+      "sanitized_name": "bomber",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000013_bomber_common.png",
+        "evolution": "assets/cards/evolution/26000013_bomber_common_evo.png"
+      }
+    },
+    {
+      "id": 26000014,
+      "name": "Musketeer",
+      "sanitized_name": "musketeer",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000014_musketeer_rare.png",
+        "evolution": "assets/cards/evolution/26000014_musketeer_rare_evo.png"
+      }
+    },
+    {
+      "id": 26000015,
+      "name": "Baby Dragon",
+      "sanitized_name": "baby_dragon",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000015_baby_dragon_epic.png",
+        "evolution": "assets/cards/evolution/26000015_baby_dragon_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000016,
+      "name": "Prince",
+      "sanitized_name": "prince",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000016_prince_epic.png"
+      }
+    },
+    {
+      "id": 26000017,
+      "name": "Wizard",
+      "sanitized_name": "wizard",
+      "rarity": "rare",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000017_wizard_rare.png",
+        "evolution": "assets/cards/evolution/26000017_wizard_rare_evo.png"
+      }
+    },
+    {
+      "id": 26000018,
+      "name": "Mini P.E.K.K.A",
+      "sanitized_name": "mini_pekka",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000018_mini_pekka_rare.png"
+      }
+    },
+    {
+      "id": 26000019,
+      "name": "Spear Goblins",
+      "sanitized_name": "spear_goblins",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000019_spear_goblins_common.png"
+      }
+    },
+    {
+      "id": 26000020,
+      "name": "Giant Skeleton",
+      "sanitized_name": "giant_skeleton",
+      "rarity": "epic",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000020_giant_skeleton_epic.png"
+      }
+    },
+    {
+      "id": 26000021,
+      "name": "Hog Rider",
+      "sanitized_name": "hog_rider",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000021_hog_rider_rare.png"
+      }
+    },
+    {
+      "id": 26000022,
+      "name": "Minion Horde",
+      "sanitized_name": "minion_horde",
+      "rarity": "common",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000022_minion_horde_common.png"
+      }
+    },
+    {
+      "id": 26000023,
+      "name": "Ice Wizard",
+      "sanitized_name": "ice_wizard",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000023_ice_wizard_legendary.png"
+      }
+    },
+    {
+      "id": 26000024,
+      "name": "Royal Giant",
+      "sanitized_name": "royal_giant",
+      "rarity": "common",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000024_royal_giant_common.png",
+        "evolution": "assets/cards/evolution/26000024_royal_giant_common_evo.png"
+      }
+    },
+    {
+      "id": 26000025,
+      "name": "Guards",
+      "sanitized_name": "guards",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000025_guards_epic.png"
+      }
+    },
+    {
+      "id": 26000026,
+      "name": "Princess",
+      "sanitized_name": "princess",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000026_princess_legendary.png"
+      }
+    },
+    {
+      "id": 26000027,
+      "name": "Dark Prince",
+      "sanitized_name": "dark_prince",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000027_dark_prince_epic.png"
+      }
+    },
+    {
+      "id": 26000028,
+      "name": "Three Musketeers",
+      "sanitized_name": "three_musketeers",
+      "rarity": "rare",
+      "elixir_cost": 9,
+      "files": {
+        "normal": "assets/cards/normal/26000028_three_musketeers_rare.png"
+      }
+    },
+    {
+      "id": 26000029,
+      "name": "Lava Hound",
+      "sanitized_name": "lava_hound",
+      "rarity": "legendary",
+      "elixir_cost": 7,
+      "files": {
+        "normal": "assets/cards/normal/26000029_lava_hound_legendary.png"
+      }
+    },
+    {
+      "id": 26000030,
+      "name": "Ice Spirit",
+      "sanitized_name": "ice_spirit",
+      "rarity": "common",
+      "elixir_cost": 1,
+      "files": {
+        "normal": "assets/cards/normal/26000030_ice_spirit_common.png",
+        "evolution": "assets/cards/evolution/26000030_ice_spirit_common_evo.png"
+      }
+    },
+    {
+      "id": 26000031,
+      "name": "Fire Spirit",
+      "sanitized_name": "fire_spirit",
+      "rarity": "common",
+      "elixir_cost": 1,
+      "files": {
+        "normal": "assets/cards/normal/26000031_fire_spirit_common.png"
+      }
+    },
+    {
+      "id": 26000032,
+      "name": "Miner",
+      "sanitized_name": "miner",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000032_miner_legendary.png"
+      }
+    },
+    {
+      "id": 26000033,
+      "name": "Sparky",
+      "sanitized_name": "sparky",
+      "rarity": "legendary",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000033_sparky_legendary.png"
+      }
+    },
+    {
+      "id": 26000034,
+      "name": "Bowler",
+      "sanitized_name": "bowler",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000034_bowler_epic.png"
+      }
+    },
+    {
+      "id": 26000035,
+      "name": "Lumberjack",
+      "sanitized_name": "lumberjack",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000035_lumberjack_legendary.png",
+        "evolution": "assets/cards/evolution/26000035_lumberjack_legendary_evo.png"
+      }
+    },
+    {
+      "id": 26000036,
+      "name": "Battle Ram",
+      "sanitized_name": "battle_ram",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000036_battle_ram_rare.png",
+        "evolution": "assets/cards/evolution/26000036_battle_ram_rare_evo.png"
+      }
+    },
+    {
+      "id": 26000037,
+      "name": "Inferno Dragon",
+      "sanitized_name": "inferno_dragon",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000037_inferno_dragon_legendary.png",
+        "evolution": "assets/cards/evolution/26000037_inferno_dragon_legendary_evo.png"
+      }
+    },
+    {
+      "id": 26000038,
+      "name": "Ice Golem",
+      "sanitized_name": "ice_golem",
+      "rarity": "rare",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000038_ice_golem_rare.png"
+      }
+    },
+    {
+      "id": 26000039,
+      "name": "Mega Minion",
+      "sanitized_name": "mega_minion",
+      "rarity": "rare",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000039_mega_minion_rare.png"
+      }
+    },
+    {
+      "id": 26000040,
+      "name": "Dart Goblin",
+      "sanitized_name": "dart_goblin",
+      "rarity": "rare",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000040_dart_goblin_rare.png",
+        "evolution": "assets/cards/evolution/26000040_dart_goblin_rare_evo.png"
+      }
+    },
+    {
+      "id": 26000041,
+      "name": "Goblin Gang",
+      "sanitized_name": "goblin_gang",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000041_goblin_gang_common.png"
+      }
+    },
+    {
+      "id": 26000042,
+      "name": "Electro Wizard",
+      "sanitized_name": "electro_wizard",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000042_electro_wizard_legendary.png"
+      }
+    },
+    {
+      "id": 26000043,
+      "name": "Elite Barbarians",
+      "sanitized_name": "elite_barbarians",
+      "rarity": "common",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000043_elite_barbarians_common.png"
+      }
+    },
+    {
+      "id": 26000044,
+      "name": "Hunter",
+      "sanitized_name": "hunter",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000044_hunter_epic.png",
+        "evolution": "assets/cards/evolution/26000044_hunter_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000045,
+      "name": "Executioner",
+      "sanitized_name": "executioner",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000045_executioner_epic.png",
+        "evolution": "assets/cards/evolution/26000045_executioner_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000046,
+      "name": "Bandit",
+      "sanitized_name": "bandit",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000046_bandit_legendary.png"
+      }
+    },
+    {
+      "id": 26000047,
+      "name": "Royal Recruits",
+      "sanitized_name": "royal_recruits",
+      "rarity": "common",
+      "elixir_cost": 7,
+      "files": {
+        "normal": "assets/cards/normal/26000047_royal_recruits_common.png",
+        "evolution": "assets/cards/evolution/26000047_royal_recruits_common_evo.png"
+      }
+    },
+    {
+      "id": 26000048,
+      "name": "Night Witch",
+      "sanitized_name": "night_witch",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000048_night_witch_legendary.png"
+      }
+    },
+    {
+      "id": 26000049,
+      "name": "Bats",
+      "sanitized_name": "bats",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000049_bats_common.png",
+        "evolution": "assets/cards/evolution/26000049_bats_common_evo.png"
+      }
+    },
+    {
+      "id": 26000050,
+      "name": "Royal Ghost",
+      "sanitized_name": "royal_ghost",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000050_royal_ghost_legendary.png"
+      }
+    },
+    {
+      "id": 26000051,
+      "name": "Ram Rider",
+      "sanitized_name": "ram_rider",
+      "rarity": "legendary",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000051_ram_rider_legendary.png"
+      }
+    },
+    {
+      "id": 26000052,
+      "name": "Zappies",
+      "sanitized_name": "zappies",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000052_zappies_rare.png"
+      }
+    },
+    {
+      "id": 26000053,
+      "name": "Rascals",
+      "sanitized_name": "rascals",
+      "rarity": "common",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000053_rascals_common.png"
+      }
+    },
+    {
+      "id": 26000054,
+      "name": "Cannon Cart",
+      "sanitized_name": "cannon_cart",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000054_cannon_cart_epic.png"
+      }
+    },
+    {
+      "id": 26000055,
+      "name": "Mega Knight",
+      "sanitized_name": "mega_knight",
+      "rarity": "legendary",
+      "elixir_cost": 7,
+      "files": {
+        "normal": "assets/cards/normal/26000055_mega_knight_legendary.png",
+        "evolution": "assets/cards/evolution/26000055_mega_knight_legendary_evo.png"
+      }
+    },
+    {
+      "id": 26000056,
+      "name": "Skeleton Barrel",
+      "sanitized_name": "skeleton_barrel",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000056_skeleton_barrel_common.png",
+        "evolution": "assets/cards/evolution/26000056_skeleton_barrel_common_evo.png"
+      }
+    },
+    {
+      "id": 26000057,
+      "name": "Flying Machine",
+      "sanitized_name": "flying_machine",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000057_flying_machine_rare.png"
+      }
+    },
+    {
+      "id": 26000058,
+      "name": "Wall Breakers",
+      "sanitized_name": "wall_breakers",
+      "rarity": "epic",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000058_wall_breakers_epic.png",
+        "evolution": "assets/cards/evolution/26000058_wall_breakers_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000059,
+      "name": "Royal Hogs",
+      "sanitized_name": "royal_hogs",
+      "rarity": "rare",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000059_royal_hogs_rare.png"
+      }
+    },
+    {
+      "id": 26000060,
+      "name": "Goblin Giant",
+      "sanitized_name": "goblin_giant",
+      "rarity": "epic",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000060_goblin_giant_epic.png",
+        "evolution": "assets/cards/evolution/26000060_goblin_giant_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000061,
+      "name": "Fisherman",
+      "sanitized_name": "fisherman",
+      "rarity": "legendary",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000061_fisherman_legendary.png"
+      }
+    },
+    {
+      "id": 26000062,
+      "name": "Magic Archer",
+      "sanitized_name": "magic_archer",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000062_magic_archer_legendary.png"
+      }
+    },
+    {
+      "id": 26000063,
+      "name": "Electro Dragon",
+      "sanitized_name": "electro_dragon",
+      "rarity": "epic",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000063_electro_dragon_epic.png",
+        "evolution": "assets/cards/evolution/26000063_electro_dragon_epic_evo.png"
+      }
+    },
+    {
+      "id": 26000064,
+      "name": "Firecracker",
+      "sanitized_name": "firecracker",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000064_firecracker_common.png",
+        "evolution": "assets/cards/evolution/26000064_firecracker_common_evo.png"
+      }
+    },
+    {
+      "id": 26000065,
+      "name": "Mighty Miner",
+      "sanitized_name": "mighty_miner",
+      "rarity": "champion",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000065_mighty_miner_champion.png"
+      }
+    },
+    {
+      "id": 26000067,
+      "name": "Elixir Golem",
+      "sanitized_name": "elixir_golem",
+      "rarity": "rare",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000067_elixir_golem_rare.png"
+      }
+    },
+    {
+      "id": 26000068,
+      "name": "Battle Healer",
+      "sanitized_name": "battle_healer",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000068_battle_healer_rare.png"
+      }
+    },
+    {
+      "id": 26000069,
+      "name": "Skeleton King",
+      "sanitized_name": "skeleton_king",
+      "rarity": "champion",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000069_skeleton_king_champion.png"
+      }
+    },
+    {
+      "id": 26000072,
+      "name": "Archer Queen",
+      "sanitized_name": "archer_queen",
+      "rarity": "champion",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000072_archer_queen_champion.png"
+      }
+    },
+    {
+      "id": 26000074,
+      "name": "Golden Knight",
+      "sanitized_name": "golden_knight",
+      "rarity": "champion",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000074_golden_knight_champion.png"
+      }
+    },
+    {
+      "id": 26000077,
+      "name": "Monk",
+      "sanitized_name": "monk",
+      "rarity": "champion",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000077_monk_champion.png"
+      }
+    },
+    {
+      "id": 26000080,
+      "name": "Skeleton Dragons",
+      "sanitized_name": "skeleton_dragons",
+      "rarity": "common",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000080_skeleton_dragons_common.png"
+      }
+    },
+    {
+      "id": 26000083,
+      "name": "Mother Witch",
+      "sanitized_name": "mother_witch",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000083_mother_witch_legendary.png"
+      }
+    },
+    {
+      "id": 26000084,
+      "name": "Electro Spirit",
+      "sanitized_name": "electro_spirit",
+      "rarity": "common",
+      "elixir_cost": 1,
+      "files": {
+        "normal": "assets/cards/normal/26000084_electro_spirit_common.png"
+      }
+    },
+    {
+      "id": 26000085,
+      "name": "Electro Giant",
+      "sanitized_name": "electro_giant",
+      "rarity": "epic",
+      "elixir_cost": 7,
+      "files": {
+        "normal": "assets/cards/normal/26000085_electro_giant_epic.png"
+      }
+    },
+    {
+      "id": 26000087,
+      "name": "Phoenix",
+      "sanitized_name": "phoenix",
+      "rarity": "legendary",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000087_phoenix_legendary.png"
+      }
+    },
+    {
+      "id": 26000093,
+      "name": "Little Prince",
+      "sanitized_name": "little_prince",
+      "rarity": "champion",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/26000093_little_prince_champion.png"
+      }
+    },
+    {
+      "id": 26000095,
+      "name": "Goblin Demolisher",
+      "sanitized_name": "goblin_demolisher",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000095_goblin_demolisher_rare.png"
+      }
+    },
+    {
+      "id": 26000096,
+      "name": "Goblin Machine",
+      "sanitized_name": "goblin_machine",
+      "rarity": "legendary",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000096_goblin_machine_legendary.png"
+      }
+    },
+    {
+      "id": 26000097,
+      "name": "Suspicious Bush",
+      "sanitized_name": "suspicious_bush",
+      "rarity": "rare",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000097_suspicious_bush_rare.png"
+      }
+    },
+    {
+      "id": 26000099,
+      "name": "Goblinstein",
+      "sanitized_name": "goblinstein",
+      "rarity": "champion",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/26000099_goblinstein_champion.png"
+      }
+    },
+    {
+      "id": 26000101,
+      "name": "Rune Giant",
+      "sanitized_name": "rune_giant",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/26000101_rune_giant_epic.png"
+      }
+    },
+    {
+      "id": 26000102,
+      "name": "Berserker",
+      "sanitized_name": "berserker",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/26000102_berserker_common.png"
+      }
+    },
+    {
+      "id": 26000103,
+      "name": "Boss Bandit",
+      "sanitized_name": "boss_bandit",
+      "rarity": "champion",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/26000103_boss_bandit_champion.png"
+      }
+    },
+    {
+      "id": 27000000,
+      "name": "Cannon",
+      "sanitized_name": "cannon",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/27000000_cannon_common.png",
+        "evolution": "assets/cards/evolution/27000000_cannon_common_evo.png"
+      }
+    },
+    {
+      "id": 27000001,
+      "name": "Goblin Hut",
+      "sanitized_name": "goblin_hut",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000001_goblin_hut_rare.png"
+      }
+    },
+    {
+      "id": 27000002,
+      "name": "Mortar",
+      "sanitized_name": "mortar",
+      "rarity": "common",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000002_mortar_common.png",
+        "evolution": "assets/cards/evolution/27000002_mortar_common_evo.png"
+      }
+    },
+    {
+      "id": 27000003,
+      "name": "Inferno Tower",
+      "sanitized_name": "inferno_tower",
+      "rarity": "rare",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/27000003_inferno_tower_rare.png"
+      }
+    },
+    {
+      "id": 27000004,
+      "name": "Bomb Tower",
+      "sanitized_name": "bomb_tower",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000004_bomb_tower_rare.png"
+      }
+    },
+    {
+      "id": 27000005,
+      "name": "Barbarian Hut",
+      "sanitized_name": "barbarian_hut",
+      "rarity": "rare",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/27000005_barbarian_hut_rare.png"
+      }
+    },
+    {
+      "id": 27000006,
+      "name": "Tesla",
+      "sanitized_name": "tesla",
+      "rarity": "common",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000006_tesla_common.png",
+        "evolution": "assets/cards/evolution/27000006_tesla_common_evo.png"
+      }
+    },
+    {
+      "id": 27000007,
+      "name": "Elixir Collector",
+      "sanitized_name": "elixir_collector",
+      "rarity": "rare",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/27000007_elixir_collector_rare.png"
+      }
+    },
+    {
+      "id": 27000008,
+      "name": "X-Bow",
+      "sanitized_name": "x-bow",
+      "rarity": "epic",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/27000008_x-bow_epic.png"
+      }
+    },
+    {
+      "id": 27000009,
+      "name": "Tombstone",
+      "sanitized_name": "tombstone",
+      "rarity": "rare",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/27000009_tombstone_rare.png"
+      }
+    },
+    {
+      "id": 27000010,
+      "name": "Furnace",
+      "sanitized_name": "furnace",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000010_furnace_rare.png",
+        "evolution": "assets/cards/evolution/27000010_furnace_rare_evo.png"
+      }
+    },
+    {
+      "id": 27000012,
+      "name": "Goblin Cage",
+      "sanitized_name": "goblin_cage",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000012_goblin_cage_rare.png",
+        "evolution": "assets/cards/evolution/27000012_goblin_cage_rare_evo.png"
+      }
+    },
+    {
+      "id": 27000013,
+      "name": "Goblin Drill",
+      "sanitized_name": "goblin_drill",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/27000013_goblin_drill_epic.png",
+        "evolution": "assets/cards/evolution/27000013_goblin_drill_epic_evo.png"
+      }
+    },
+    {
+      "id": 28000000,
+      "name": "Fireball",
+      "sanitized_name": "fireball",
+      "rarity": "rare",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/28000000_fireball_rare.png"
+      }
+    },
+    {
+      "id": 28000001,
+      "name": "Arrows",
+      "sanitized_name": "arrows",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000001_arrows_common.png"
+      }
+    },
+    {
+      "id": 28000002,
+      "name": "Rage",
+      "sanitized_name": "rage",
+      "rarity": "epic",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000002_rage_epic.png"
+      }
+    },
+    {
+      "id": 28000003,
+      "name": "Rocket",
+      "sanitized_name": "rocket",
+      "rarity": "rare",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/28000003_rocket_rare.png"
+      }
+    },
+    {
+      "id": 28000004,
+      "name": "Goblin Barrel",
+      "sanitized_name": "goblin_barrel",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000004_goblin_barrel_epic.png",
+        "evolution": "assets/cards/evolution/28000004_goblin_barrel_epic_evo.png"
+      }
+    },
+    {
+      "id": 28000005,
+      "name": "Freeze",
+      "sanitized_name": "freeze",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/28000005_freeze_epic.png"
+      }
+    },
+    {
+      "id": 28000006,
+      "name": "Mirror",
+      "sanitized_name": "mirror",
+      "rarity": "epic",
+      "elixir_cost": null,
+      "files": {
+        "normal": "assets/cards/normal/28000006_mirror_epic.png"
+      }
+    },
+    {
+      "id": 28000007,
+      "name": "Lightning",
+      "sanitized_name": "lightning",
+      "rarity": "epic",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/28000007_lightning_epic.png"
+      }
+    },
+    {
+      "id": 28000008,
+      "name": "Zap",
+      "sanitized_name": "zap",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000008_zap_common.png",
+        "evolution": "assets/cards/evolution/28000008_zap_common_evo.png"
+      }
+    },
+    {
+      "id": 28000009,
+      "name": "Poison",
+      "sanitized_name": "poison",
+      "rarity": "epic",
+      "elixir_cost": 4,
+      "files": {
+        "normal": "assets/cards/normal/28000009_poison_epic.png"
+      }
+    },
+    {
+      "id": 28000010,
+      "name": "Graveyard",
+      "sanitized_name": "graveyard",
+      "rarity": "legendary",
+      "elixir_cost": 5,
+      "files": {
+        "normal": "assets/cards/normal/28000010_graveyard_legendary.png"
+      }
+    },
+    {
+      "id": 28000011,
+      "name": "The Log",
+      "sanitized_name": "the_log",
+      "rarity": "legendary",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000011_the_log_legendary.png"
+      }
+    },
+    {
+      "id": 28000012,
+      "name": "Tornado",
+      "sanitized_name": "tornado",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000012_tornado_epic.png"
+      }
+    },
+    {
+      "id": 28000013,
+      "name": "Clone",
+      "sanitized_name": "clone",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000013_clone_epic.png"
+      }
+    },
+    {
+      "id": 28000014,
+      "name": "Earthquake",
+      "sanitized_name": "earthquake",
+      "rarity": "rare",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000014_earthquake_rare.png"
+      }
+    },
+    {
+      "id": 28000015,
+      "name": "Barbarian Barrel",
+      "sanitized_name": "barbarian_barrel",
+      "rarity": "epic",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000015_barbarian_barrel_epic.png"
+      }
+    },
+    {
+      "id": 28000016,
+      "name": "Heal Spirit",
+      "sanitized_name": "heal_spirit",
+      "rarity": "rare",
+      "elixir_cost": 1,
+      "files": {
+        "normal": "assets/cards/normal/28000016_heal_spirit_rare.png"
+      }
+    },
+    {
+      "id": 28000017,
+      "name": "Giant Snowball",
+      "sanitized_name": "giant_snowball",
+      "rarity": "common",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000017_giant_snowball_common.png",
+        "evolution": "assets/cards/evolution/28000017_giant_snowball_common_evo.png"
+      }
+    },
+    {
+      "id": 28000018,
+      "name": "Royal Delivery",
+      "sanitized_name": "royal_delivery",
+      "rarity": "common",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000018_royal_delivery_common.png"
+      }
+    },
+    {
+      "id": 28000023,
+      "name": "Void",
+      "sanitized_name": "void",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000023_void_epic.png"
+      }
+    },
+    {
+      "id": 28000024,
+      "name": "Goblin Curse",
+      "sanitized_name": "goblin_curse",
+      "rarity": "epic",
+      "elixir_cost": 2,
+      "files": {
+        "normal": "assets/cards/normal/28000024_goblin_curse_epic.png"
+      }
+    },
+    {
+      "id": 28000025,
+      "name": "Spirit Empress",
+      "sanitized_name": "spirit_empress",
+      "rarity": "legendary",
+      "elixir_cost": 6,
+      "files": {
+        "normal": "assets/cards/normal/28000025_spirit_empress_legendary.png"
+      }
+    },
+    {
+      "id": 28000026,
+      "name": "Vines",
+      "sanitized_name": "vines",
+      "rarity": "epic",
+      "elixir_cost": 3,
+      "files": {
+        "normal": "assets/cards/normal/28000026_vines_epic.png"
+      }
+    }
+  ],
+  "support_items": [
+    {
+      "id": 159000000,
+      "name": "Tower Princess",
+      "sanitized_name": "tower_princess",
+      "rarity": "common",
+      "file": "assets/cards/support/159000000_tower_princess_common.png"
+    },
+    {
+      "id": 159000001,
+      "name": "Cannoneer",
+      "sanitized_name": "cannoneer",
+      "rarity": "epic",
+      "file": "assets/cards/support/159000001_cannoneer_epic.png"
+    },
+    {
+      "id": 159000002,
+      "name": "Dagger Duchess",
+      "sanitized_name": "dagger_duchess",
+      "rarity": "legendary",
+      "file": "assets/cards/support/159000002_dagger_duchess_legendary.png"
+    },
+    {
+      "id": 159000004,
+      "name": "Royal Chef",
+      "sanitized_name": "royal_chef",
+      "rarity": "legendary",
+      "file": "assets/cards/support/159000004_royal_chef_legendary.png"
+    }
+  ],
+  "statistics": {
+    "total_cards": 121,
+    "total_support": 4,
+    "downloaded_images": 161,
+    "normal_images": 121,
+    "evolution_images": 36,
+    "support_images": 4
+  }
+}
