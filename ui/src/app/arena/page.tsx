@@ -326,15 +326,15 @@ export default function Arena() {
                         
                         let gifType;
                         if (isMovingDown) {
-                          gifType = 'player'; // Vers le bas = player
+                          gifType = 'opponent'; // Vers le bas = opponent
                         } else if (isMovingUp) {
-                          gifType = 'opponent'; // Vers le haut = opponent
+                          gifType = 'player'; // Vers le haut = player
                         } else {
                           // Mouvement horizontal ou statique, utiliser selon l'équipe
-                          gifType = giant.team === 'red' ? 'opponent' : 'player';
+                          gifType = giant.team === 'red' ? 'player' : 'opponent';
                         }
                         
-                        gifPath = `/images/troops/giant/Giant_walk_${gifType}_109-109.gif?v=${Math.floor(giant.position.row)}-${Math.floor(giant.position.col)}`;
+                        gifPath = `/images/troops/giant/Giant_walk_${gifType}_109-109.gif?v=${giant.isInCombat}`;
                       }
                       
                       return (
