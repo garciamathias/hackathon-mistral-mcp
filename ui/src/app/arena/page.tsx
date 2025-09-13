@@ -10,7 +10,6 @@ import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 
 export default function Arena() {
-  const showFlaggedCells = false;
   const showGrid = false;
 
   const numRows = 34;
@@ -32,9 +31,9 @@ export default function Arena() {
       image: '/images/towers/king_red.png',
       row: 2,
       col: 8,
-      size: 6,
-      offsetX: 1,
-      offsetY: -2,
+      size: 6.5,
+      offsetX: 1.4,
+      offsetY: -2.8,
       team: 'red',
       type: 'king',
       flagged_cells: [
@@ -65,7 +64,7 @@ export default function Arena() {
       col: 3,
       size: 4,
       offsetX: -0.7,
-      offsetY: -2.3,
+      offsetY: -3.3,
       team: 'red',
       type: 'princess',
       flagged_cells: [
@@ -89,7 +88,7 @@ export default function Arena() {
       col: 14,
       size: 4,
       offsetX: 0,
-      offsetY: -2.3,
+      offsetY: -3.3,
       team: 'red',
       type: 'princess',
       flagged_cells: [
@@ -339,7 +338,7 @@ export default function Arena() {
       )}
       
       {/* Container avec ratio 9/16 */}
-      <div className="relative w-[56.25vh] h-screen max-w-full max-h-screen z-10">
+      <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
         <img
           src="/images/backgrounds/arena_in_game.png"
           alt="Arena In Game"
@@ -347,7 +346,7 @@ export default function Arena() {
         />
 
         {/* Damier interactif */}
-        <div className="absolute inset-0 pl-[12%] pr-[16.3%] pt-[44.3%] pb-[30.4%]">
+        <div className="absolute  inset-0 pl-[10%] pr-[9.8%] pt-[27.8%] pb-[34.2%]">
           <div className={`w-full h-full grid gap-0`} style={{
             gridTemplateColumns: `repeat(${numCols}, 1fr)`,
             gridTemplateRows: `repeat(${numRows}, 1fr)`
@@ -368,14 +367,11 @@ export default function Arena() {
               const towerImage = shouldShowTower ? towerPosition.image : null;
               const tower = towerPosition;
               
-              // Vérifier si cette cellule est marquée par une tour active
-              const flaggedCells = getActiveTowersFlaggedCells();
-              const isFlagged = flaggedCells.has(`${row}-${col}`);
-              
               return (
                 <div
                   key={index}
-                  className={`w-full h-full transition-all duration-200 relative bg-transparent ${
+                  className={`w-full h-full transition-all duration-200 relative ${!showGrid ? 'bg-transparent' : 'bg-black/20'}
+                      ${
                     spawnMode.active 
                       ? `cursor-crosshair ${
                           spawnMode.team === 'red' 
@@ -384,9 +380,7 @@ export default function Arena() {
                         }`
                       : 'cursor-pointer'
                   } ${
-                    showFlaggedCells && isFlagged 
-                      ? 'bg-red-500/70 hover:bg-red-400/80 hover:ring-2 ring-red-300'
-                      : showGrid && isEven 
+                    isEven 
                         ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
                         : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
                   }`}
