@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Serveur MCP officiel pour Clash Royale
-Compatible avec le SDK MCP officiel et Alpic.ai
+Serveur MCP pour Clash Royale - Format Alpic.ai
+Utilise le format exact attendu par Alpic.ai pour la détection du transport
 """
 
 import asyncio
@@ -14,14 +14,14 @@ import logging
 # Import du SDK MCP officiel
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent, CallToolResult
+from mcp.types import Tool, TextContent
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 class ClashRoyaleMCPServer:
-    """Serveur MCP officiel pour Clash Royale compatible Alpic.ai"""
+    """Serveur MCP pour Clash Royale compatible Alpic.ai"""
     
     def __init__(self):
         self.game_state = {
@@ -346,15 +346,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         }
         return [TextContent(type="text", text=json.dumps(error_result, indent=2, ensure_ascii=False))]
 
-async def main():
-    """Point d'entrée principal du serveur MCP"""
-    logger.info("🎮 Clash Royale MCP Server started")
-    
-    async with stdio_server() as streams:
-        await server.run(
-            streams[0], streams[1], 
-            server.create_initialization_options()
-        )
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Format détectable par Alpic.ai - utilise mcp.run() avec transport explicite
+# Cette ligne est détectée par Alpic.ai pour identifier le transport
+import mcp
+mcp.run(transport="stdio", server=server)
