@@ -59,7 +59,7 @@ export default function Arena() {
         />
 
         {/* Damier interactif */}
-        <div className="absolute inset-0 bg-black/20 pl-14 pr-19 pt-51 pb-35">
+        <div className="absolute inset-0 bg-black/20 pl-[12%] pr-[16.3%] pt-[44.3%] pb-[30.4%]">
           <div className={`w-full h-full grid gap-0`} style={{
             gridTemplateColumns: `repeat(${numCols}, 1fr)`,
             gridTemplateRows: `repeat(${numRows}, 1fr)`
