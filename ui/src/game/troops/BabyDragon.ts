@@ -543,7 +543,7 @@ export class BabyDragonEntity {
       }
     }
     
-    if (!target || (target.type === 'troop' && !target.data?.isAlive)) {
+    if (!target || (target.type === 'troop' && !target.isAlive)) {
       console.log(`BabyDragon ${this.data.id} target ${this.data.towerTarget} not found or dead!`);
       // Retourner en mode recherche de cible
       this.data.state = BabyDragonState.SEEKING_TARGET;

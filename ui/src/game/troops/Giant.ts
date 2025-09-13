@@ -144,14 +144,14 @@ export class GiantEntity {
         break;
 
       case GiantState.MOVING_TO_BRIDGE:
-        this.handleMovingToBridge(deltaTime, flaggedCells, gameEngine);
+        this.handleMovingToBridge(deltaTime, flaggedCells);
         break;
 
 
       case GiantState.TARGETING_TOWER:
         // Si pas encore de cible définie, en trouver une
         if (!this.data.towerTarget) {
-          this.findAndTargetEnemy(activeTowers, gameEngine);
+          this.findAndTargetEnemy(activeTowers);
         }
         
         if (this.data.towerTarget) {
@@ -402,7 +402,7 @@ export class GiantEntity {
 
 
 
-  private handleMovingToBridge(deltaTime: number, flaggedCells?: Set<string>, gameEngine?: any): void {
+  private handleMovingToBridge(deltaTime: number, flaggedCells?: Set<string>): void {
     // Vérifier si le Giant a déjà passé la frontière (pont)
     const frontierRow = 16;
     const hasCrossedFrontier = this.data.team === 'blue' ? 
@@ -424,7 +424,7 @@ export class GiantEntity {
     }
   }
 
-  private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
+  private findAndTargetEnemy(activeTowers: any[]): void {
     // Giants focusOnBuildings: true - ciblent toujours les tours
     this.findAndTargetEnemyTower(activeTowers);
   }

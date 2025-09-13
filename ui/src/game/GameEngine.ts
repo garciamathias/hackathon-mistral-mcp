@@ -126,7 +126,10 @@ export class GameEngine {
   }
 
   public getActiveTowers(): Tower[] {
-    return this.getAllTowers().filter(tower => tower.active && tower.isAlive);
+    const allTowers = this.getAllTowers();
+    const activeTowers = allTowers.filter(tower => tower.active && tower.isAlive);
+    console.log(`GameEngine.getActiveTowers: ${allTowers.length} total towers, ${activeTowers.length} active towers`);
+    return activeTowers;
   }
 
   public getTroop(id: string): BaseTroop | undefined {
@@ -198,8 +201,8 @@ export class GameEngine {
 
   private cleanupDeadTroops(): void {
     const deadTroops = Array.from(this.troops.entries())
-      .filter(([_, troop]) => !troop.data.isAlive)
-      .map(([id, _]) => id);
+      .filter(([, troop]) => !troop.data.isAlive)
+      .map(([id, ]) => id);
     
     for (const id of deadTroops) {
       this.troops.delete(id);
