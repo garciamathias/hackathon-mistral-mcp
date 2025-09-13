@@ -15,12 +15,16 @@ def main():
     print("\nPour arrêter le serveur, appuyez sur Ctrl+C")
     print("-" * 50)
     
+    # Port pour déploiement (Railway, Render, etc.)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    
     try:
         uvicorn.run(
             "mcp_server:app",
             host="0.0.0.0",
-            port=8000,
-            reload=True,
+            port=port,
+            reload=False,  # Désactiver reload en production
             log_level="info"
         )
     except KeyboardInterrupt:
