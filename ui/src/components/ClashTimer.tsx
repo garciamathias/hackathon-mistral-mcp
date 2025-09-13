@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 
 export default function ClashTimer() {
-  const [timeLeft, setTimeLeft] = useState(171); // 2:51 in seconds
+  const [timeLeft, setTimeLeft] = useState(180); // 3:00 in seconds
   const [isRunning, setIsRunning] = useState(true);
 
   useEffect(() => {

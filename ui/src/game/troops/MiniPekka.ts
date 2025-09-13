@@ -223,6 +223,11 @@ export class MiniPekkaEntity {
         console.log(`MiniPekka ${this.data.id} target troop ${this.data.towerTarget} is dead`);
         return false;
       }
+      // Check if target is a flying troop (MiniPekkas can't target flying troops)
+      if (targetTroop.data.flying) {
+        console.log(`MiniPekka ${this.data.id} target troop ${this.data.towerTarget} is flying and cannot be targeted`);
+        return false;
+      }
       return true;
     }
 
@@ -521,6 +526,15 @@ export class MiniPekkaEntity {
     }
     
     if (!target || (target.type === 'troop' && !target.isAlive)) {
+      this.data.state = MiniPekkaState.SEEKING_TARGET;
+      this.data.towerTarget = undefined;
+      this.data.isInCombat = false;
+      return;
+    }
+
+    // Check if target is a flying troop (MiniPekkas can't attack flying troops)
+    if (target.type === 'troop' && 'flying' in target && target.flying) {
+      console.log(`MiniPekka ${this.data.id} cannot attack flying troop ${this.data.towerTarget}, switching to seeking mode`);
       this.data.state = MiniPekkaState.SEEKING_TARGET;
       this.data.towerTarget = undefined;
       this.data.isInCombat = false;

@@ -86,7 +86,10 @@ export interface TroopConfig {
   };
   focusOnBuildings: boolean;
   flying: boolean;
-  scale: number;
+  scale: number | {
+    walk: number;
+    fight: number;
+  };
 }
 
 export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {

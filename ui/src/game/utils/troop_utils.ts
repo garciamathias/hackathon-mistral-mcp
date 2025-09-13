@@ -12,9 +12,9 @@ export class TroopUtils {
   static isOnOwnSide(troop: BaseTroop): boolean {
     const frontierRow = 16;
     if (troop.team === 'blue') {
-      return troop.position.row <= frontierRow; // Bleu commence en bas
+      return troop.position.row >= frontierRow; // Bleu commence en bas (row >= 16)
     } else {
-      return troop.position.row >= frontierRow; // Rouge commence en haut
+      return troop.position.row <= frontierRow; // Rouge commence en haut (row <= 16)
     }
   }
 
@@ -100,11 +100,11 @@ export class TroopUtils {
     if (!troop.focusOnBuildings) {
       // Logique pour les troupes qui ne se concentrent pas sur les bâtiments
       if (troop.flying) {
-        // Flying + non focusOnBuildings : aller directement vers l'ennemi le plus proche
-        console.log(`${troop.type} ${troop.id} is flying and not focused on buildings - going directly to closest enemy`);
-        return TroopState.TARGETING_TOWER;
+        // Flying + non focusOnBuildings : utiliser la logique avec rayon de détection
+        console.log(`${troop.type} ${troop.id} is flying and not focused on buildings - using radius detection logic`);
+        return TroopUtils.handleNonFocusTransition(troop, activeTowers, gameEngine, true);
       } else {
-        // Non flying + non focusOnBuildings : logique complexe basée sur la position
+        // Non flying + non focusOnBuildings : logique avec rayon de détection
         return TroopUtils.handleNonFlyingNonFocusTransition(troop, activeTowers, gameEngine);
       }
     } else {
@@ -121,47 +121,76 @@ export class TroopUtils {
     activeTowers: Tower[], 
     gameEngine?: SimpleGameEngine
   ): TroopState {
+    return TroopUtils.handleNonFocusTransition(troop, activeTowers, gameEngine, false);
+  }
+
+  /**
+   * Logique commune pour les troupes qui ne focusent pas les bâtiments (volantes et non-volantes)
+   */
+  static handleNonFocusTransition<T extends BaseTroop>(
+    troop: T, 
+    activeTowers: Tower[], 
+    gameEngine?: SimpleGameEngine,
+    isFlying: boolean = false
+  ): TroopState {
+    const detectionRadius = 7;
     const isOnOwnSide = TroopUtils.isOnOwnSide(troop);
     
-    if (isOnOwnSide) {
-      // Sur son propre côté : vérifier si l'ennemi le plus proche est du même côté ou de l'autre côté
-      if (gameEngine) {
-        const closestEnemyResult = gameEngine.findClosestEnemy(troop);
-        const distanceToBridge = TroopUtils.getDistanceToBridge(troop);
+    if (gameEngine) {
+      const closestEnemyResult = gameEngine.findClosestEnemy(troop);
+      
+      if (closestEnemyResult) {
+        const enemy = closestEnemyResult.target;
+        let enemyPosition: Position;
         
-        if (closestEnemyResult) {
-          const enemy = closestEnemyResult.target;
-          let enemyPosition: Position;
-          
-          if (enemy.type === 'tower') {
-            enemyPosition = { row: enemy.row || 0, col: enemy.col || 0 };
-          } else {
-            enemyPosition = enemy.position || { row: 0, col: 0 };
-          }
-          
-          const isEnemyOnSameSide = TroopUtils.isPositionOnSameSide(enemyPosition, troop.team);
-          
-          if (isEnemyOnSameSide && closestEnemyResult.distance < distanceToBridge) {
-            // L'ennemi est sur le même côté et plus proche que le pont, aller directement vers lui
-            console.log(`${troop.type} ${troop.id} - enemy on same side and closer than bridge, targeting enemy directly`);
-            return TroopState.TARGETING_TOWER;
-          } else {
-            // L'ennemi est de l'autre côté ou le pont est plus proche, aller au pont d'abord
-            console.log(`${troop.type} ${troop.id} - enemy on opposite side or bridge closer, going to bridge first`);
-            return TroopState.MOVING_TO_BRIDGE;
-          }
+        if (enemy.type === 'tower') {
+          enemyPosition = { row: enemy.row || 0, col: enemy.col || 0 };
         } else {
-          // Pas d'ennemi trouvé, aller au pont
-          console.log(`${troop.type} ${troop.id} - no enemy found, going to bridge`);
-          return TroopState.MOVING_TO_BRIDGE;
+          enemyPosition = enemy.position || { row: 0, col: 0 };
+        }
+        
+        // Pour les non-volantes, vérifier si l'ennemi est du même côté
+        let isEnemyTargetable = true;
+        if (!isFlying) {
+          const isEnemyOnSameSide = TroopUtils.isPositionOnSameSide(enemyPosition, troop.team);
+          isEnemyTargetable = isEnemyOnSameSide;
+        }
+        
+        // Si l'ennemi est dans le rayon de détection ET ciblable
+        if (closestEnemyResult.distance <= detectionRadius && isEnemyTargetable) {
+          console.log(`${troop.type} ${troop.id} - enemy within radius ${detectionRadius} and targetable, going for enemy`);
+          return TroopState.TARGETING_TOWER;
+        } else {
+          // Ennemi trop loin ou pas ciblable, aller vers les tours
+          console.log(`${troop.type} ${troop.id} - no enemy within radius ${detectionRadius} or not targetable, targeting towers`);
+          return TroopUtils.handleTowerTargeting(troop, isOnOwnSide, isFlying);
         }
       } else {
-        // Fallback vers le pont si gameEngine n'est pas disponible
-        return TroopState.MOVING_TO_BRIDGE;
+        // Pas d'ennemi trouvé du tout, aller vers les tours
+        console.log(`${troop.type} ${troop.id} - no enemy found, targeting towers`);
+        return TroopUtils.handleTowerTargeting(troop, isOnOwnSide, isFlying);
       }
     } else {
-      // Sur le côté adverse : aller vers l'ennemi le plus proche (troupe ou tour)
-      console.log(`${troop.type} ${troop.id} - on opponent side, targeting closest enemy`);
+      // Pas de gameEngine, aller vers les tours
+      return TroopUtils.handleTowerTargeting(troop, isOnOwnSide, isFlying);
+    }
+  }
+
+  /**
+   * Gère le ciblage des tours selon la position et le type de troupe
+   */
+  static handleTowerTargeting<T extends BaseTroop>(
+    troop: T,
+    isOnOwnSide: boolean,
+    isFlying: boolean
+  ): TroopState {
+    if (isOnOwnSide && !isFlying) {
+      // Non-volante sur son côté : doit aller au pont pour atteindre les tours ennemies
+      console.log(`${troop.type} ${troop.id} - on own side, must go to bridge to reach enemy towers`);
+      return TroopState.MOVING_TO_BRIDGE;
+    } else {
+      // Volante ou déjà du côté adverse : aller directement vers les tours
+      console.log(`${troop.type} ${troop.id} - targeting enemy towers directly`);
       return TroopState.TARGETING_TOWER;
     }
   }
@@ -236,8 +265,9 @@ export class TroopUtils {
         const distanceToBridge = TroopUtils.getDistanceToTarget(troop);
         
         // Si l'ennemi est sur le même côté et beaucoup plus proche que le pont, l'intercepter
-        if (isEnemyOnSameSide && closestEnemyResult.distance < distanceToBridge * 0.5) {
-          console.log(`${troop.type} ${troop.id} - intercepting close enemy on same side while going to bridge`);
+        // Mais seulement si on est encore sur notre côté (pas encore passé le pont)
+        if (isEnemyOnSameSide && closestEnemyResult.distance < distanceToBridge * 0.3 && TroopUtils.isOnOwnSide(troop)) {
+          console.log(`${troop.type} ${troop.id} - intercepting very close enemy on same side while going to bridge`);
           return TroopState.TARGETING_TOWER;
         }
       }
@@ -257,7 +287,7 @@ export class TroopUtils {
   }
 
   /**
-   * Trouve et cible un ennemi selon les propriétés de la troupe
+   * Trouve et cible un ennemi selon les propriétés de la troupe avec rayon de détection
    */
   static findAndTargetEnemy<T extends BaseTroop>(
     troop: T,
@@ -272,7 +302,9 @@ export class TroopUtils {
         findAndTargetEnemyTowerCallback(activeTowers);
       }
     } else {
-      // Nouvelle logique : cibler le plus proche (troupe ou tour)
+      // Nouvelle logique avec rayon de détection
+      const detectionRadius = 7;
+      
       if (gameEngine && setTarget) {
         const closestEnemyResult = gameEngine.findClosestEnemy(troop);
         if (closestEnemyResult) {
@@ -281,8 +313,31 @@ export class TroopUtils {
             row: target.type === 'tower' ? (target.row || 0) : (target.position?.row || 0), 
             col: target.type === 'tower' ? (target.col || 0) : (target.position?.col || 0) 
           };
-          setTarget(target.id, targetPosition);
-          console.log(`${troop.type} ${troop.id} targeting closest enemy ${target.type} ${target.id} at (${targetPosition.row}, ${targetPosition.col})`);
+          
+          // Pour les non-volantes, vérifier si l'ennemi est du même côté
+          let isEnemyTargetable = true;
+          if (!troop.flying) {
+            const isEnemyOnSameSide = TroopUtils.isPositionOnSameSide(targetPosition, troop.team);
+            isEnemyTargetable = isEnemyOnSameSide;
+          }
+          
+          // Si l'ennemi est dans le rayon de détection ET ciblable
+          if (closestEnemyResult.distance <= detectionRadius && isEnemyTargetable) {
+            setTarget(target.id, targetPosition);
+            console.log(`${troop.type} ${troop.id} targeting enemy ${target.type} ${target.id} within radius ${detectionRadius} at (${targetPosition.row}, ${targetPosition.col})`);
+          } else {
+            // Ennemi trop loin ou pas ciblable, cibler les tours
+            console.log(`${troop.type} ${troop.id} - enemy too far (${closestEnemyResult.distance.toFixed(2)}) or not targetable, targeting towers instead`);
+            if (findAndTargetEnemyTowerCallback) {
+              findAndTargetEnemyTowerCallback(activeTowers);
+            }
+          }
+        } else {
+          // Pas d'ennemi trouvé, cibler les tours
+          console.log(`${troop.type} ${troop.id} - no enemy found, targeting towers`);
+          if (findAndTargetEnemyTowerCallback) {
+            findAndTargetEnemyTowerCallback(activeTowers);
+          }
         }
       } else {
         // Fallback vers la logique originale si gameEngine n'est pas disponible

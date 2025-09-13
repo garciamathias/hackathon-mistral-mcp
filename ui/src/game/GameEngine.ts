@@ -337,7 +337,7 @@ export class GameEngine {
     let closestTarget: any = null;
     let closestDistance = Infinity;
 
-    // Vérifier les tours ennemies
+    // Vérifier les tours ennemies (toujours accessibles)
     activeTowers.forEach(tower => {
       if (tower.team !== troop.team) {
         const distance = Math.sqrt(
@@ -351,8 +351,24 @@ export class GameEngine {
       }
     });
 
-    // Vérifier les troupes ennemies
+    // Vérifier les troupes ennemies (avec restriction flying vs non-flying et côté de la rivière)
     enemyTroops.forEach(enemyTroop => {
+      // Non-flying troops cannot target flying troops
+      if (!troop.flying && enemyTroop.flying) {
+        return; // Skip flying troops for non-flying attackers
+      }
+      
+      // Pour les troupes non-volantes, vérifier qu'elles sont du même côté de la rivière
+      if (!troop.flying) {
+        const frontierRow = 16;
+        const troopSide = troop.position.row <= frontierRow ? 'top' : 'bottom';
+        const enemySide = enemyTroop.position.row <= frontierRow ? 'top' : 'bottom';
+        
+        if (troopSide !== enemySide) {
+          return; // Skip enemies on opposite side of river for non-flying troops
+        }
+      }
+      
       const distance = Math.sqrt(
         Math.pow(enemyTroop.position.row - troop.position.row, 2) +
         Math.pow(enemyTroop.position.col - troop.position.col, 2)
