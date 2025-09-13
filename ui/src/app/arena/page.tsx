@@ -313,32 +313,37 @@ export default function Arena() {
                       Math.floor(giant.position.row) === row && 
                       Math.floor(giant.position.col) === col
                     )
-                    .map(giant => (
-                      <div
-                        key={giant.id}
-                        className={`absolute z-20 w-full h-full flex items-center justify-center pointer-events-none`}
-                        style={{
-                          transform: `translate(${(giant.position.col - Math.floor(giant.position.col)) * 100}%, ${(giant.position.row - Math.floor(giant.position.row)) * 100}%)`
-                        }}
-                      >
-                        <div 
-                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold ${
-                            giant.team === 'red' 
-                              ? 'bg-red-500 border-red-700 text-white' 
-                              : 'bg-blue-500 border-blue-700 text-white'
-                          }`}
+                    .map(giant => {
+                      const team = giant.team === 'red' ? 'player' : 'opponent';
+                      const gifPath = `/images/troops/giant/Giant_walk_${team}_109-109.gif`;
+                      
+                      return (
+                        <div
+                          key={giant.id}
+                          className={`absolute z-20 w-full h-full flex items-center justify-center pointer-events-none`}
+                          style={{
+                            transform: `translate(${(giant.position.col - Math.floor(giant.position.col)) * 100}%, ${(giant.position.row - Math.floor(giant.position.row)) * 100}%)`
+                          }}
                         >
-                          G
-                        </div>
-                        {/* Barre de vie */}
-                        <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
-                          <div 
-                            className={`h-full rounded ${giant.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
-                            style={{ width: `${(giant.health / giant.maxHealth) * 100}%` }}
+                          {/* GIF du Giant */}
+                          <img
+                            src={gifPath}
+                            alt={`Giant ${giant.team}`}
+                            className="w-12 h-12 object-contain"
                           />
+                          
+                          {/* Barre de vie */}
+                          <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
+                            <div 
+                              className={`h-full rounded transition-all duration-200 ${
+                                giant.team === 'red' ? 'bg-red-400' : 'bg-blue-400'
+                              }`}
+                              style={{ width: `${(giant.health / giant.maxHealth) * 100}%` }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   }
                 </div>
               );
