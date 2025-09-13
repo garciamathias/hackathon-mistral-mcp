@@ -1,6 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@font-face {
+  font-family: 'Supercell Magic';
+  src: url('/font/SUPERCELL-MAGIC.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ensure Supercell Magic font is available globally */
+.supercell-font {
+  font-family: 'Supercell Magic', 'Arial', sans-serif !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

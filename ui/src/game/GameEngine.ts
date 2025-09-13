@@ -1,4 +1,6 @@
-import { GiantEntity, Giant } from './Giant';
+import { GiantEntity, Giant } from './troops/Giant';
+import { BabyDragonEntity, BabyDragon } from './troops/BabyDragon';
+import { BaseTroop, TroopEntity, TroopType } from './types/Troop';
 
 export interface GameState {
   isRunning: boolean;
@@ -8,10 +10,10 @@ export interface GameState {
 }
 
 export class GameEngine {
-  private giants: Map<string, GiantEntity> = new Map();
+  private troops: Map<string, TroopEntity> = new Map();
   private gameState: GameState;
   private animationFrameId: number | null = null;
-  private onUpdateCallback?: (giants: Giant[]) => void;
+  private onUpdateCallback?: (troops: BaseTroop[]) => void;
 
   constructor() {
     this.gameState = {
@@ -52,44 +54,81 @@ export class GameEngine {
       this.animationFrameId = null;
     }
     
-    this.giants.clear();
+    this.troops.clear();
   }
 
-  public spawnGiant(team: 'red' | 'blue'): string {
-    const id = `giant_${team}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const giant = new GiantEntity(id, team);
-    this.giants.set(id, giant);
-    
-    console.log(`Giant spawned: ${id} for team ${team}`);
+  // Méthodes génériques pour les troupes
+  public spawnTroop(type: TroopType, team: 'red' | 'blue', row?: number, col?: number): string {
+    const id = `${type}_${team}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    let troop: TroopEntity;
+
+    switch (type) {
+      case TroopType.GIANT:
+        troop = row !== undefined && col !== undefined 
+          ? new GiantEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new GiantEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.BABY_DRAGON:
+        troop = row !== undefined && col !== undefined 
+          ? new BabyDragonEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new BabyDragonEntity(id, team) as unknown as TroopEntity;
+        break;
+      default:
+        throw new Error(`Unknown troop type: ${type}`);
+    }
+
+    this.troops.set(id, troop);
+    console.log(`${type} spawned: ${id} for team ${team}${row !== undefined && col !== undefined ? ` at (${row}, ${col})` : ''}`);
     return id;
+  }
+
+  // Méthodes de compatibilité pour les anciens appels
+  public spawnGiant(team: 'red' | 'blue'): string {
+    return this.spawnTroop(TroopType.GIANT, team);
   }
 
   public spawnGiantAt(team: 'red' | 'blue', row: number, col: number): string {
-    const id = `giant_${team}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const giant = new GiantEntity(id, team, { row, col });
-    this.giants.set(id, giant);
-    
-    console.log(`Giant spawned at (${row}, ${col}): ${id} for team ${team}`);
-    return id;
+    return this.spawnTroop(TroopType.GIANT, team, row, col);
   }
 
-  public removeGiant(id: string): void {
-    this.giants.delete(id);
+  public spawnBabyDragon(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.BABY_DRAGON, team, row, col);
   }
 
-  public getGiant(id: string): Giant | undefined {
-    return this.giants.get(id)?.data;
+  public removeTroop(id: string): void {
+    this.troops.delete(id);
   }
 
+  public getTroop(id: string): BaseTroop | undefined {
+    return this.troops.get(id)?.data;
+  }
+
+  public getAllTroops(): BaseTroop[] {
+    return Array.from(this.troops.values()).map(troop => troop.data);
+  }
+
+  public getTroopsByType(type: TroopType): BaseTroop[] {
+    return this.getAllTroops().filter(troop => troop.type === type);
+  }
+
+  public getLivingTroops(): BaseTroop[] {
+    return this.getAllTroops().filter(troop => troop.isAlive);
+  }
+
+  // Méthodes de compatibilité
   public getAllGiants(): Giant[] {
-    return Array.from(this.giants.values()).map(giant => giant.data);
+    return this.getTroopsByType(TroopType.GIANT) as unknown as Giant[];
+  }
+
+  public getAllBabyDragons(): BabyDragon[] {
+    return this.getTroopsByType(TroopType.BABY_DRAGON) as unknown as BabyDragon[];
   }
 
   public getLivingGiants(): Giant[] {
     return this.getAllGiants().filter(giant => giant.isAlive);
   }
 
-  public setOnUpdateCallback(callback: (giants: Giant[]) => void): void {
+  public setOnUpdateCallback(callback: (troops: BaseTroop[]) => void): void {
     this.onUpdateCallback = callback;
   }
 
@@ -110,30 +149,30 @@ export class GameEngine {
   };
 
   private update(deltaTime: number): void {
-    // Nettoyer les géants morts
-    this.cleanupDeadGiants();
+    // Nettoyer les troupes mortes
+    this.cleanupDeadTroops();
     
-    // Mettre à jour tous les géants vivants
+    // Mettre à jour toutes les troupes vivantes
     const activeTowers = this.getActiveTowers();
     const flaggedCells = this.getFlaggedCells();
     
-    for (const giant of this.giants.values()) {
-      giant.update(deltaTime, activeTowers, flaggedCells);
+    for (const troop of this.troops.values()) {
+      troop.update(deltaTime, activeTowers, flaggedCells);
     }
 
     // Notifier les composants React
     if (this.onUpdateCallback) {
-      this.onUpdateCallback(this.getAllGiants());
+      this.onUpdateCallback(this.getAllTroops());
     }
   }
 
-  private cleanupDeadGiants(): void {
-    const deadGiants = Array.from(this.giants.entries())
-      .filter(([_, giant]) => !giant.data.isAlive)
+  private cleanupDeadTroops(): void {
+    const deadTroops = Array.from(this.troops.entries())
+      .filter(([_, troop]) => !troop.data.isAlive)
       .map(([id, _]) => id);
     
-    for (const id of deadGiants) {
-      this.giants.delete(id);
+    for (const id of deadTroops) {
+      this.troops.delete(id);
     }
   }
 
@@ -160,14 +199,26 @@ export class GameEngine {
 
   // Méthodes utilitaires pour les statistiques
   public getGameStats() {
+    const allTroops = this.getAllTroops();
+    const livingTroops = this.getLivingTroops();
     const giants = this.getAllGiants();
-    const livingGiants = this.getLivingGiants();
+    const babyDragons = this.getAllBabyDragons();
     
     return {
+      totalTroops: allTroops.length,
+      livingTroops: livingTroops.length,
+      redTroops: allTroops.filter(t => t.team === 'red').length,
+      blueTroops: allTroops.filter(t => t.team === 'blue').length,
+      // Statistiques par type
       totalGiants: giants.length,
-      livingGiants: livingGiants.length,
+      livingGiants: giants.filter(g => g.isAlive).length,
       redGiants: giants.filter(g => g.team === 'red').length,
       blueGiants: giants.filter(g => g.team === 'blue').length,
+      totalBabyDragons: babyDragons.length,
+      livingBabyDragons: babyDragons.filter(d => d.isAlive).length,
+      redBabyDragons: babyDragons.filter(d => d.team === 'red').length,
+      blueBabyDragons: babyDragons.filter(d => d.team === 'blue').length,
+      // État du jeu
       gameTime: this.gameState.gameTime,
       isRunning: this.gameState.isRunning,
       isPaused: this.gameState.isPaused

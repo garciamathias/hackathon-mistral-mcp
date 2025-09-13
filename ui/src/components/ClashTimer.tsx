@@ -37,18 +37,16 @@ export default function ClashTimer() {
            }}>
 
         {/* "Time left:" text in yellow/gold - centered */}
-        <div className="text-yellow-400 text-xs font-bold tracking-wide"
+        <div className="text-yellow-400 text-xs font-bold tracking-wide supercell-font"
              style={{
-               fontFamily: "'Supercell Magic', sans-serif",
                textShadow: '1px 1px 2px rgba(0,0,0,1)'
              }}>
           Time left:
         </div>
 
         {/* Timer numbers in white - centered */}
-        <div className="text-white text-2xl font-bold tracking-wider leading-tight"
+        <div className="text-white text-2xl font-bold tracking-wider leading-tight supercell-font"
              style={{
-               fontFamily: "'Supercell Magic', sans-serif",
                textShadow: '2px 2px 4px rgba(0,0,0,1)'
              }}>
           {formatTime(timeLeft)}

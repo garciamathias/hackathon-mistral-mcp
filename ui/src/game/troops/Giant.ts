@@ -11,8 +11,11 @@ export interface GiantPosition {
   col: number;
 }
 
+import { TroopType } from '../types/Troop';
+
 export interface Giant {
   id: string;
+  type: TroopType.GIANT;
   team: 'red' | 'blue';
   position: GiantPosition;
   targetPosition: GiantPosition;
@@ -35,37 +38,19 @@ export const BRIDGES: GiantPosition[] = [
   { row: 16, col: 14 }
 ];
 
-// Zones de spawn
-export const SPAWN_ZONES = {
-  red: [
-    { row: 32, col: 8 },
-    { row: 32, col: 9 },
-    { row: 33, col: 8 },
-    { row: 33, col: 9 }
-  ],
-  blue: [
-    { row: 0, col: 8 },
-    { row: 0, col: 9 },
-    { row: 1, col: 8 },
-    { row: 1, col: 9 }
-  ]
-};
-
 export class GiantEntity {
   public data: Giant;
 
   constructor(id: string, team: 'red' | 'blue', customPosition?: GiantPosition) {
-    // Position de spawn : personnalisée ou aléatoire dans la zone de l'équipe
-    const spawnPosition = customPosition || (() => {
-      const spawnZone = SPAWN_ZONES[team];
-      return spawnZone[Math.floor(Math.random() * spawnZone.length)];
-    })();
+    const defaultPosition = { row: 0, col: 0 };
+    const startPosition = customPosition || defaultPosition;
 
     this.data = {
       id,
+      type: TroopType.GIANT,
       team,
-      position: { ...spawnPosition },
-      targetPosition: { ...spawnPosition },
+      position: { ...startPosition },
+      targetPosition: { ...startPosition },
       state: GiantState.SPAWNING,
       health: 100,
       maxHealth: 100,
@@ -140,13 +125,7 @@ export class GiantEntity {
 
   public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>): void {
     if (!this.data.isAlive) return;
-    
-    // Log périodique pour debug (toutes les 2 secondes)
-    if (Math.floor(performance.now() / 1000) % 2 === 0 && Math.floor(performance.now() / 100) % 20 === 0) {
-      console.log(`Giant ${this.data.id} (${this.data.team}) state: ${this.data.state}, position: (${this.data.position.row.toFixed(1)}, ${this.data.position.col.toFixed(1)})`);
-    }
 
-    console.log(`Giant ${this.data.id} (${this.data.team}) state: ${this.data.state}, distanceToTarget: ${this.getDistanceToTarget().toFixed(2)}`);
 
     switch (this.data.state) {
       case GiantState.SPAWNING:
@@ -201,8 +180,6 @@ export class GiantEntity {
           // Vérifier la distance à la tour cible
           const distanceToTower = this.getDistanceToTarget();
 
-          console.log(`Giant ${this.data.id} distanceToTower: ${distanceToTower.toFixed(2)}`);
-          
           if (distanceToTower <= (this.data.team === 'red' ? 2.6 : 2.0)) {
             // À moins d'une case de la tour, passer en mode combat
             console.log(`Giant ${this.data.id} entering combat mode! Distance: ${distanceToTower.toFixed(2)}`);
@@ -254,7 +231,6 @@ export class GiantEntity {
       const avoidanceDirection = this.calculateSmartAvoidance(position, target, flaggedCells, moveDistance);
       
       if (avoidanceDirection) {
-        console.log(`Giant ${this.data.id} (${this.data.team}) found avoidance direction: (${avoidanceDirection.dx.toFixed(2)}, ${avoidanceDirection.dy.toFixed(2)})`);
         normalizedDx = avoidanceDirection.dx;
         normalizedDy = avoidanceDirection.dy;
       } else {

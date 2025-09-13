@@ -4,6 +4,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useGameEngine } from "@/game/useGameEngine";
+import TowerHealthBar from "@/components/TowerHealthBar";
+import ClashTimer from "@/components/ClashTimer";
+import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 
 export default function Arena() {
   const numRows = 34;
@@ -11,9 +14,10 @@ export default function Arena() {
 
   const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
   const [highlightFlaggedCells, setHighlightFlaggedCells] = useState<boolean>(false);
-  const [spawnMode, setSpawnMode] = useState<{active: boolean, team: 'red' | 'blue' | null}>({
+  const [spawnMode, setSpawnMode] = useState<{active: boolean, team: 'red' | 'blue' | null, troopType: TroopType | null}>({
     active: false,
-    team: null
+    team: null,
+    troopType: null
   });
    
   // Fonction pour obtenir toutes les cellules marquées des tours actives
@@ -201,9 +205,13 @@ export default function Arena() {
   
   // Hook du moteur de jeu
   const { 
+    troops,
     giants, 
+    babyDragons,
     gameStats, 
+    spawnTroop,
     spawnGiantAt,
+    spawnBabyDragon,
     startGame, 
     pauseGame, 
     resumeGame, 
@@ -213,20 +221,47 @@ export default function Arena() {
   } = useGameEngine(towersForGame, flaggedCells);
 
   // Fonctions pour le mode spawn
-  const activateSpawnMode = (team: 'red' | 'blue') => {
-    setSpawnMode({ active: true, team });
+  const activateSpawnMode = (team: 'red' | 'blue', troopType: TroopType) => {
+    setSpawnMode({ active: true, team, troopType });
   };
 
   const deactivateSpawnMode = () => {
-    setSpawnMode({ active: false, team: null });
+    setSpawnMode({ active: false, team: null, troopType: null });
   };
 
   const handleCellClick = (row: number, col: number) => {
-    if (spawnMode.active && spawnMode.team && isGameRunning) {
-      spawnGiantAt(spawnMode.team, row, col);
+    if (spawnMode.active && spawnMode.team && spawnMode.troopType && isGameRunning) {
+      spawnTroop(spawnMode.troopType, spawnMode.team, row, col);
       deactivateSpawnMode();
     } else {
       console.log(`Cell ${row}, ${col}`);
+    }
+  };
+
+  // Fonction pour obtenir le GIF path d'une troupe
+  const getTroopGifPath = (troop: any) => {
+    const config = TROOP_CONFIGS[troop.type as TroopType];
+    if (!config) return null;
+
+    if (troop.isInCombat) {
+      const team = troop.team === 'red' ? 'opponent' : 'player';
+      return `${config.gifPaths.fight[team as 'player' | 'opponent']}?v=${troop.isInCombat}`;
+    } else {
+      // Mode marche - déterminer la direction
+      const isMovingDown = troop.targetPosition.row > troop.position.row;
+      const isMovingUp = troop.targetPosition.row < troop.position.row;
+      
+      let gifType: 'player' | 'opponent';
+      if (isMovingDown) {
+        gifType = 'opponent'; // Vers le bas = opponent
+      } else if (isMovingUp) {
+        gifType = 'player'; // Vers le haut = player
+      } else {
+        // Mouvement horizontal ou statique, utiliser selon l'équipe
+        gifType = troop.team === 'red' ? 'player' : 'opponent';
+      }
+      
+      return `${config.gifPaths.walk[gifType]}?v=${troop.isInCombat}`;
     }
   };
 
@@ -296,63 +331,61 @@ export default function Arena() {
                   onClick={() => handleCellClick(row, col)}
                 >
                   {towerImage && (
-                    <img
-                      src={towerImage}
-                      alt={tower?.name}
-                      className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
-                      style={{
-                        transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
-                      }}
-                    />
+                    <>
+                      <img
+                        src={towerImage}
+                        alt={tower?.name}
+                        className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
+                        style={{
+                          transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
+                        }}
+                      />
+                      {/* Health Bar pour chaque tour */}
+                      <div 
+                        className="absolute z-20 pointer-events-none"
+                        style={{
+                          left: `${(tower as any).offsetX - 20}px`,
+                          top: `${(tower as any).type === 'king' ? -60 : (tower as any).offsetY - 40}px`,
+                        }}
+                      >
+                        <TowerHealthBar
+                          currentHealth={tower?.type === 'king' ? 2400 : 1400}
+                          maxHealth={tower?.type === 'king' ? 2400 : 1400}
+                          isKing={tower?.type === 'king'}
+                          team={(tower?.team as 'red' | 'blue') || 'red'}
+                        />
+                      </div>
+                    </>
                   )}
                   
-                  {/* Rendu des Giants sur cette cellule */}
-                  {giants
-                    .filter(giant => 
-                      Math.floor(giant.position.row) === row && 
-                      Math.floor(giant.position.col) === col
+                  {/* Rendu des troupes sur cette cellule */}
+                  {troops
+                    .filter(troop => 
+                      Math.floor(troop.position.row) === row && 
+                      Math.floor(troop.position.col) === col
                     )
-                    .map(giant => {
-                      // Choisir le GIF selon l'état du Giant
-                      let gifPath;
-                      if (giant.isInCombat) {
-                        // Mode combat
-                        const team = giant.team === 'red' ? 'opponent' : 'player';
-                        gifPath = `/images/troops/giant/Giant_fight_${team}_109-109.gif?v=${giant.isInCombat}`;
-                      } else {
-                        // Mode marche - déterminer la direction
-                        const isMovingDown = giant.targetPosition.row > giant.position.row;
-                        const isMovingUp = giant.targetPosition.row < giant.position.row;
-                        
-                        let gifType;
-                        if (isMovingDown) {
-                          gifType = 'opponent'; // Vers le bas = opponent
-                        } else if (isMovingUp) {
-                          gifType = 'player'; // Vers le haut = player
-                        } else {
-                          // Mouvement horizontal ou statique, utiliser selon l'équipe
-                          gifType = giant.team === 'red' ? 'player' : 'opponent';
-                        }
-                        
-                        gifPath = `/images/troops/giant/Giant_walk_${gifType}_109-109.gif?v=${giant.isInCombat}`;
-                      }
+                    .map(troop => {
+                      const gifPath = getTroopGifPath(troop);
+                      const config = TROOP_CONFIGS[troop.type as TroopType];
+                      
+                      if (!gifPath || !config) return null;
                       
                       return (
                         <div
-                          key={giant.id}
+                          key={troop.id}
                           className={`absolute z-20 w-full h-full flex items-center justify-center pointer-events-none`}
                           style={{
-                            transform: `translate(${(giant.position.col - Math.floor(giant.position.col)) * 100}%, ${(giant.position.row - Math.floor(giant.position.row)) * 100}%)`
+                            transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)`
                           }}
                         >
-                          {/* GIF du Giant */}
+                          {/* GIF de la troupe */}
                           <img
-                            key={`${giant.id}-${giant.isInCombat ? 'combat' : 'walk'}`}
+                            key={`${troop.id}-${troop.isInCombat ? 'combat' : 'walk'}`}
                             src={gifPath}
-                            alt={`Giant ${giant.team}`}
+                            alt={`${troop.type} ${troop.team}`}
                             className="w-12 h-12 object-contain"
                             style={{
-                              transform: 'scale(3)'
+                              transform: `scale(${config.scale})`
                             }}
                           />
                           
@@ -360,9 +393,9 @@ export default function Arena() {
                           <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
                             <div 
                               className={`h-full rounded transition-all duration-200 ${
-                                giant.team === 'red' ? 'bg-red-400' : 'bg-blue-400'
+                                troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'
                               }`}
-                              style={{ width: `${(giant.health / giant.maxHealth) * 100}%` }}
+                              style={{ width: `${(troop.health / troop.maxHealth) * 100}%` }}
                             />
                           </div>
                         </div>
@@ -375,6 +408,11 @@ export default function Arena() {
           </div>
         </div>
         
+        {/* Timer du jeu */}
+        <div className=" absolute top-4 right-4 z-10">
+          <ClashTimer />
+        </div>
+
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">
           <div className="space-x-2">
@@ -442,30 +480,50 @@ export default function Arena() {
             )}
           </div>
           
-          {/* Spawn Giants */}
+          {/* Spawn Troops */}
           {isGameRunning && (
-            <div className="space-x-2">
+            <div className="space-y-2">
               {!spawnMode.active ? (
                 <>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('red')}
-                  >
-                    Spawn Red Giant
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                    onClick={() => activateSpawnMode('blue')}
-                  >
-                    Spawn Blue Giant
-                  </Button>
+                  {/* Boutons pour Giants */}
+                  <div className="space-x-2">
+                    <Button 
+                      variant="secondary" 
+                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                      onClick={() => activateSpawnMode('red', TroopType.GIANT)}
+                    >
+                      Spawn Red Giant
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                      onClick={() => activateSpawnMode('blue', TroopType.GIANT)}
+                    >
+                      Spawn Blue Giant
+                    </Button>
+                  </div>
+                  {/* Boutons pour Baby Dragons */}
+                  <div className="space-x-2">
+                    <Button 
+                      variant="secondary" 
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                      onClick={() => activateSpawnMode('red', TroopType.BABY_DRAGON)}
+                    >
+                      Spawn Red Dragon
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                      onClick={() => activateSpawnMode('blue', TroopType.BABY_DRAGON)}
+                    >
+                      Spawn Blue Dragon
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <div className="flex items-center space-x-2">
                   <span className={`text-sm font-bold ${spawnMode.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
-                    Click on a cell to spawn {spawnMode.team} giant
+                    Click on a cell to spawn {spawnMode.team} {spawnMode.troopType}
                   </span>
                   <Button 
                     variant="secondary" 
@@ -484,8 +542,10 @@ export default function Arena() {
         {isGameRunning && (
           <div className="absolute top-4 right-4 z-10 bg-black/70 text-white p-4 rounded-lg">
             <div className="text-sm space-y-1">
+              <div>Troops: {gameStats.livingTroops}/{gameStats.totalTroops}</div>
+              <div>Red: {gameStats.redTroops} | Blue: {gameStats.blueTroops}</div>
               <div>Giants: {gameStats.livingGiants}/{gameStats.totalGiants}</div>
-              <div>Red: {gameStats.redGiants} | Blue: {gameStats.blueGiants}</div>
+              <div>Dragons: {gameStats.livingBabyDragons}/{gameStats.totalBabyDragons}</div>
               <div>Time: {Math.floor(gameStats.gameTime)}s</div>
             </div>
           </div>

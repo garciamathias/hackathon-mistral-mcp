@@ -18,10 +18,9 @@ export default function TowerHealthBar({
   return (
     <div className="relative">
       {/* Nombre HP positionné au-dessus et légèrement à gauche de la barre */}
-      <span className="absolute z-20 text-white"
+      <span className="absolute z-20 text-white supercell-font"
             style={{
               fontSize: '10px',
-              fontFamily: "'Supercell Magic', sans-serif",
               fontWeight: '300',
               textShadow: '0 0 3px rgba(0,0,0,1), 1px 1px 2px rgba(0,0,0,1)',
               left: '2px',
