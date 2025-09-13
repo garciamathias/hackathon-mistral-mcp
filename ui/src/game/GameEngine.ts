@@ -1,6 +1,7 @@
 import { GiantEntity, Giant } from './troops/Giant';
 import { BabyDragonEntity, BabyDragon } from './troops/BabyDragon';
 import { BaseTroop, TroopEntity, TroopType } from './types/Troop';
+import { TowerEntity, Tower } from './types/Tower';
 
 export interface GameState {
   isRunning: boolean;
@@ -11,6 +12,7 @@ export interface GameState {
 
 export class GameEngine {
   private troops: Map<string, TroopEntity> = new Map();
+  private towers: Map<string, TowerEntity> = new Map();
   private gameState: GameState;
   private animationFrameId: number | null = null;
   private onUpdateCallback?: (troops: BaseTroop[]) => void;
@@ -55,6 +57,7 @@ export class GameEngine {
     }
     
     this.troops.clear();
+    this.towers.clear();
   }
 
   // Méthodes génériques pour les troupes
@@ -97,6 +100,33 @@ export class GameEngine {
 
   public removeTroop(id: string): void {
     this.troops.delete(id);
+  }
+
+  // Méthodes pour les tours
+  public addTower(id: string, type: 'king' | 'princess', team: 'red' | 'blue', row: number, col: number): void {
+    const tower = new TowerEntity(id, type, team, row, col);
+    this.towers.set(id, tower);
+    console.log(`Tower ${type} added: ${id} for team ${team} at (${row}, ${col})`);
+  }
+
+  public removeTower(id: string): void {
+    this.towers.delete(id);
+  }
+
+  public getTower(id: string): Tower | undefined {
+    return this.towers.get(id)?.data;
+  }
+
+  public getTowerEntity(id: string): TowerEntity | undefined {
+    return this.towers.get(id);
+  }
+
+  public getAllTowers(): Tower[] {
+    return Array.from(this.towers.values()).map(tower => tower.data);
+  }
+
+  public getActiveTowers(): Tower[] {
+    return this.getAllTowers().filter(tower => tower.active && tower.isAlive);
   }
 
   public getTroop(id: string): BaseTroop | undefined {
@@ -153,7 +183,7 @@ export class GameEngine {
     this.cleanupDeadTroops();
     
     // Mettre à jour toutes les troupes vivantes
-    const activeTowers = this.getActiveTowers();
+    const activeTowers = this.getActiveTowersInternal();
     const flaggedCells = this.getFlaggedCells();
     
     for (const troop of this.troops.values()) {
@@ -176,10 +206,8 @@ export class GameEngine {
     }
   }
 
-  private getActiveTowers(): any[] {
-    // Cette fonction sera connectée avec les données des tours de l'Arena
-    // Pour l'instant, retourne un tableau vide
-    return [];
+  private getActiveTowersInternal(): Tower[] {
+    return this.getActiveTowers();
   }
 
   private getFlaggedCells(): Set<string> {
@@ -187,10 +215,6 @@ export class GameEngine {
     return new Set<string>();
   }
 
-  public connectTowers(towers: any[]): void {
-    // Méthode pour connecter les données des tours depuis Arena
-    this.getActiveTowers = () => towers.filter(tower => tower.active);
-  }
 
   public connectFlaggedCells(flaggedCells: Set<string>): void {
     // Méthode pour connecter les flagged cells depuis Arena
@@ -199,7 +223,7 @@ export class GameEngine {
 
   // Méthode pour trouver l'ennemi le plus proche (troupe ou tour)
   public findClosestEnemy(troop: BaseTroop): { target: any, distance: number } | null {
-    const activeTowers = this.getActiveTowers();
+    const activeTowers = this.getActiveTowersInternal();
     const enemyTroops = this.getAllTroops().filter(t => 
       t.team !== troop.team && t.isAlive
     );

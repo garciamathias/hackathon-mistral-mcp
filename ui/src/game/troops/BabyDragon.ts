@@ -1,16 +1,19 @@
 export enum BabyDragonState {
-  SPAWNING,
-  SEEKING_TARGET,
-  ATTACKING_TARGET,
-  DEAD
+  SPAWNING = TroopState.SPAWNING,
+  SEEKING_TARGET = TroopState.TARGETING_TOWER,
+  ATTACKING_TARGET = TroopState.ATTACKING_TOWER,
+  DEAD = TroopState.DEAD
 }
+
 
 export interface BabyDragonPosition {
   row: number;
   col: number;
 }
 
-import { TroopType, TROOP_CONFIGS } from '../types/Troop';
+import { TroopType, TROOP_CONFIGS, TroopState, BaseTroop } from '../types/Troop';
+import { Tower } from '../types/Tower';
+import { GameEngine } from '../GameEngine';
 
 export interface BabyDragon {
   id: string;
@@ -31,6 +34,8 @@ export interface BabyDragon {
   lastAttackTime: number;
   flying: boolean;
   focusOnBuildings: boolean;
+  row: number;
+  col: number;
 }
 
 // Positions des ponts
@@ -65,7 +70,9 @@ export class BabyDragonEntity {
       attackSpeed: config.attackSpeed,
       lastAttackTime: -1, // -1 pour permettre la première attaque immédiatement
       flying: config.flying,
-      focusOnBuildings: config.focusOnBuildings
+      focusOnBuildings: config.focusOnBuildings,
+      row: startPosition.row,
+      col: startPosition.col
     };
 
     // Déterminer la stratégie de mouvement
@@ -84,7 +91,7 @@ export class BabyDragonEntity {
     // La cible sera définie dans le premier update
   }
 
-    public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>, gameEngine?: any): void {
+    public update(deltaTime: number, activeTowers: Tower[], flaggedCells?: Set<string>, gameEngine?: GameEngine): void {
     if (!this.data.isAlive) return;
 
     switch (this.data.state) {
@@ -106,7 +113,7 @@ export class BabyDragonEntity {
         
         // Recalculer la cible la plus proche seulement si pas en combat (focusOnBuildings: false)
         if (!this.data.isInCombat && gameEngine) {
-          const closestEnemyResult = gameEngine.findClosestEnemy(this.data);
+          const closestEnemyResult = gameEngine.findClosestEnemy(this.data as unknown as BaseTroop);
           if (closestEnemyResult && this.data.towerTarget !== closestEnemyResult.target.id) {
             const currentDistance = this.getDistanceToTarget();
             // Ne changer de cible que si la nouvelle cible est significativement plus proche
@@ -362,27 +369,48 @@ export class BabyDragonEntity {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private updateTargetPosition(activeTowers: any[], gameEngine?: any): void {
+  private updateTargetPosition(activeTowers: Tower[], gameEngine?: GameEngine): void {
     if (!this.data.towerTarget) return;
 
-    // Chercher d'abord dans les tours
-    let target = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    // Chercher d'abord dans les tours du GameEngine
+    let target = null;
+    if (gameEngine) {
+      const towerEntity = gameEngine.getTowerEntity(this.data.towerTarget);
+      if (towerEntity) {
+        target = { ...towerEntity.data, type: 'tower' };
+      }
+    }
+    
+    // Fallback vers activeTowers si pas trouvé dans GameEngine
+    if (!target) {
+      const tower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+      if (tower) {
+        target = { ...tower, type: 'tower' };
+      }
+    }
     
     // Si pas trouvé dans les tours, chercher dans les troupes
     if (!target && gameEngine) {
-      const allTroops = gameEngine.getAllTroops();
-      const troopTarget = allTroops.find((troop: any) => troop.id === this.data.towerTarget);
-      if (troopTarget && troopTarget.isAlive) {
-        target = { ...troopTarget, type: 'troop' };
+      const troopEntities = gameEngine.getAllTroops();
+      const troopEntity = troopEntities.find(t => t.id === this.data.towerTarget);
+      if (troopEntity && troopEntity.isAlive) {
+        target = { ...troopEntity, type: 'troop' };
       }
     }
     
     if (target) {
       // Mettre à jour la position de la cible
-      this.data.targetPosition = { 
-        row: target.type === 'troop' ? target.position.row : target.row, 
-        col: target.type === 'troop' ? target.position.col : target.col 
-      };
+      if (target.type === 'troop') {
+        this.data.targetPosition = { 
+          row: target.position?.row || 0, 
+          col: target.position?.col || 0 
+        };
+      } else {
+        this.data.targetPosition = { 
+          row: target.row || 0, 
+          col: target.col || 0 
+        };
+      }
     } else {
       // Cible disparue, la supprimer
       console.log(`BabyDragon ${this.data.id} target ${this.data.towerTarget} disappeared, clearing target`);
@@ -390,17 +418,24 @@ export class BabyDragonEntity {
     }
   }
 
-  private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
+  private findAndTargetEnemy(activeTowers: Tower[], gameEngine?: GameEngine): void {
     // BabyDragons ciblent toujours le plus proche (focusOnBuildings: false)
     if (gameEngine) {
-      const closestEnemyResult = gameEngine.findClosestEnemy(this.data);
+      const closestEnemyResult = gameEngine.findClosestEnemy(this.data as unknown as BaseTroop);
       if (closestEnemyResult) {
         const { target } = closestEnemyResult;
         this.data.towerTarget = target.id;
-        this.data.targetPosition = { 
-          row: target.type === 'tower' ? target.row : target.position.row, 
-          col: target.type === 'tower' ? target.col : target.position.col 
-        };
+        if (target.type === 'tower') {
+          this.data.targetPosition = { 
+            row: target.row || 0, 
+            col: target.col || 0 
+          };
+        } else {
+          this.data.targetPosition = { 
+            row: target.position?.row || 0, 
+            col: target.position?.col || 0 
+          };
+        }
         console.log(`BabyDragon ${this.data.id} targeting closest enemy ${target.type} ${target.id}`);
       }
     } else {
@@ -409,7 +444,7 @@ export class BabyDragonEntity {
     }
   }
 
-  private findAndTargetEnemyTower(activeTowers: any[]): void {
+  private findAndTargetEnemyTower(activeTowers: Tower[]): void {
     console.log(`BabyDragon ${this.data.id} (${this.data.team}) findAndTargetEnemyTower called with towers:`, activeTowers);
     
     // Déterminer l'équipe ennemie
@@ -453,11 +488,16 @@ export class BabyDragonEntity {
   }
 
   public takeDamage(damage: number): void {
+    if (!this.data.isAlive) return;
+    
     this.data.health -= damage;
+    console.log(`BabyDragon ${this.data.id} takes ${damage} damage! Health: ${this.data.health}/${this.data.maxHealth}`);
+    
     if (this.data.health <= 0) {
       this.data.health = 0;
       this.data.isAlive = false;
       this.data.state = BabyDragonState.DEAD;
+      console.log(`BabyDragon ${this.data.id} has been defeated!`);
     }
   }
 
@@ -469,25 +509,41 @@ export class BabyDragonEntity {
     };
   }
 
-  private attackTower(deltaTime: number, activeTowers: any[], gameEngine?: any): void {
+  private attackTower(deltaTime: number, activeTowers: Tower[], gameEngine?: GameEngine): void {
     if (!this.data.towerTarget) {
       console.log(`BabyDragon ${this.data.id} has no target in combat mode!`);
       return;
     }
 
     // Trouver la cible (peut être une tour ou une troupe)
-    let target = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    let target = null;
     
-    // Si pas trouvé dans les tours, chercher dans les troupes
-    if (!target && gameEngine) {
-      const allTroops = gameEngine.getAllTroops();
-      const troopTarget = allTroops.find((troop: any) => troop.id === this.data.towerTarget);
-      if (troopTarget) {
-        target = { ...troopTarget, type: 'troop' };
+    // D'abord chercher dans les tours du GameEngine
+    if (gameEngine) {
+      const towerEntity = gameEngine.getTowerEntity(this.data.towerTarget);
+      if (towerEntity) {
+        target = { ...towerEntity.data, type: 'tower' };
       }
     }
     
-    if (!target || (target.type === 'troop' && !target.isAlive)) {
+    // Si pas trouvé dans les tours du GameEngine, chercher dans activeTowers
+    if (!target) {
+      const tower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+      if (tower) {
+        target = { ...tower, type: 'tower' };
+      }
+    }
+    
+    // Si pas trouvé dans les tours, chercher dans les troupes du GameEngine
+    if (!target && gameEngine) {
+      const troopEntities = gameEngine.getAllTroops();
+      const troopEntity = troopEntities.find(t => t.id === this.data.towerTarget);
+      if (troopEntity) {
+        target = { ...troopEntity, type: 'troop' };
+      }
+    }
+    
+    if (!target || (target.type === 'troop' && !target.data?.isAlive)) {
       console.log(`BabyDragon ${this.data.id} target ${this.data.towerTarget} not found or dead!`);
       // Retourner en mode recherche de cible
       this.data.state = BabyDragonState.SEEKING_TARGET;
@@ -527,12 +583,20 @@ export class BabyDragonEntity {
     }
   }
 
-  private performAttack(target: any): void {
-    // Cette méthode sera appelée pour effectuer l'attaque réelle
-    // Pour l'instant, on log juste l'attaque
-    console.log(`Attack performed: BabyDragon ${this.data.id} -> ${target.type} ${target.id}`);
+  private performAttack(target: { id?: string; data?: { id?: string; takeDamage?: (damage: number) => void }; takeDamage?: (damage: number) => void; type?: string }): void {
+    // Infliger des dégâts à la cible (tour ou troupe)
+    const targetType = 'type' in target ? target.type : 'troop';
+    const targetId = 'id' in target ? target.id : (target.data ? target.data.id : 'unknown');
+    console.log(`Attack performed: BabyDragon ${this.data.id} -> ${targetType} ${targetId}`);
     
-    // TODO: Implémenter la logique de dégâts sur la cible
-    // target.takeDamage(this.data.attackDamage);
+    // Si c'est une entité du GameEngine, utiliser sa méthode takeDamage
+    if ('takeDamage' in target && typeof target.takeDamage === 'function') {
+      target.takeDamage(this.data.attackDamage);
+    } else if (target.data && 'takeDamage' in target.data && typeof target.data.takeDamage === 'function') {
+      // Si c'est une entité avec data.takeDamage
+      target.data.takeDamage(this.data.attackDamage);
+    } else {
+      console.warn(`Target ${targetId} doesn't have takeDamage method! Type: ${typeof target}, Keys: ${Object.keys(target)}`);
+    }
   }
 }

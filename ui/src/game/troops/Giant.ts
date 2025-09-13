@@ -32,7 +32,9 @@ export interface Giant {
   lastAttackTime: number;
   flying: boolean;
   focusOnBuildings: boolean;
-}
+  row: number;
+  col: number;
+  }
 
 // Positions des ponts
 export const BRIDGES: GiantPosition[] = [
@@ -66,7 +68,9 @@ export class GiantEntity {
       attackSpeed: config.attackSpeed,
       lastAttackTime: -1, // -1 pour permettre la première attaque immédiatement
       flying: config.flying,
-      focusOnBuildings: config.focusOnBuildings
+      focusOnBuildings: config.focusOnBuildings,
+      row: startPosition.row,
+      col: startPosition.col
     };
 
     // Déterminer la stratégie de mouvement
@@ -469,11 +473,16 @@ export class GiantEntity {
   }
 
   public takeDamage(damage: number): void {
+    if (!this.data.isAlive) return;
+    
     this.data.health -= damage;
+    console.log(`Giant ${this.data.id} takes ${damage} damage! Health: ${this.data.health}/${this.data.maxHealth}`);
+    
     if (this.data.health <= 0) {
       this.data.health = 0;
       this.data.isAlive = false;
       this.data.state = GiantState.DEAD;
+      console.log(`Giant ${this.data.id} has been defeated!`);
     }
   }
 
@@ -491,8 +500,17 @@ export class GiantEntity {
       return;
     }
 
-    // Trouver la tour cible
-    const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    // Trouver la tour cible dans le GameEngine
+    let targetTower = null;
+    if (gameEngine) {
+      targetTower = gameEngine.getTowerEntity(this.data.towerTarget);
+    }
+    
+    // Fallback vers activeTowers si pas trouvé dans GameEngine
+    if (!targetTower) {
+      targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    }
+    
     if (!targetTower) {
       console.log(`Giant ${this.data.id} target tower ${this.data.towerTarget} not found!`);
       // Retourner en mode recherche de tour
@@ -531,11 +549,17 @@ export class GiantEntity {
   }
 
   private performAttack(targetTower: any): void {
-    // Cette méthode sera appelée pour effectuer l'attaque réelle
-    // Pour l'instant, on log juste l'attaque
+    // Infliger des dégâts à la tour cible
     console.log(`Attack performed: Giant ${this.data.id} -> Tower ${targetTower.id}`);
     
-    // TODO: Implémenter la logique de dégâts sur la tour
-    // targetTower.takeDamage(this.data.attackDamage);
+    // Si c'est une entité de tour du GameEngine, utiliser sa méthode takeDamage
+    if (targetTower.takeDamage && typeof targetTower.takeDamage === 'function') {
+      targetTower.takeDamage(this.data.attackDamage);
+    } else if (targetTower.data && targetTower.data.takeDamage) {
+      // Si c'est une entité avec data.takeDamage
+      targetTower.data.takeDamage(this.data.attackDamage);
+    } else {
+      console.warn(`Target ${targetTower.id} doesn't have takeDamage method! Type: ${typeof targetTower}, Keys: ${Object.keys(targetTower)}`);
+    }
   }
 }

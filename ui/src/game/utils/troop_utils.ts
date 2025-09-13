@@ -1,4 +1,9 @@
-import { BaseTroop, Position, TroopState, BRIDGES } from '../types/Troop';
+import { BaseTroop, Position, TroopState, BRIDGES, TargetResult } from '../types/Troop';
+import { Tower } from '../types/Tower';
+
+interface SimpleGameEngine {
+  findClosestEnemy(troop: BaseTroop): TargetResult | null;
+}
 
 export class TroopUtils {
   /**
@@ -87,9 +92,8 @@ export class TroopUtils {
    */
   static handleSpawningTransition<T extends BaseTroop>(
     troop: T, 
-    activeTowers: any[], 
-    gameEngine?: any,
-    setState?: (state: TroopState) => void
+    activeTowers: Tower[], 
+    gameEngine?: SimpleGameEngine
   ): TroopState {
     console.log(`${troop.type} ${troop.id} (${troop.team}) handling spawning transition - flying: ${troop.flying}, focusOnBuildings: ${troop.focusOnBuildings}`);
     
@@ -114,8 +118,8 @@ export class TroopUtils {
    */
   static handleNonFlyingNonFocusTransition<T extends BaseTroop>(
     troop: T, 
-    activeTowers: any[], 
-    gameEngine?: any
+    activeTowers: Tower[], 
+    gameEngine?: SimpleGameEngine
   ): TroopState {
     const isOnOwnSide = TroopUtils.isOnOwnSide(troop);
     
@@ -168,7 +172,7 @@ export class TroopUtils {
     troop: T,
     deltaTime: number,
     flaggedCells?: Set<string>,
-    gameEngine?: any,
+    gameEngine?: SimpleGameEngine,
     moveTowardsCallback?: (target: Position, deltaTime: number, flaggedCells?: Set<string>) => void,
     isAtPositionCallback?: (target: Position) => boolean
   ): TroopState {
@@ -204,10 +208,10 @@ export class TroopUtils {
    */
   static findAndTargetEnemy<T extends BaseTroop>(
     troop: T,
-    activeTowers: any[],
-    gameEngine?: any,
+    activeTowers: Tower[],
+    gameEngine?: SimpleGameEngine,
     setTarget?: (targetId: string, targetPosition: Position) => void,
-    findAndTargetEnemyTowerCallback?: (activeTowers: any[]) => void
+    findAndTargetEnemyTowerCallback?: (activeTowers: Tower[]) => void
   ): void {
     if (troop.focusOnBuildings) {
       // Logique originale : cibler uniquement les tours
@@ -221,8 +225,8 @@ export class TroopUtils {
         if (closestEnemyResult) {
           const { target } = closestEnemyResult;
           const targetPosition = { 
-            row: target.type === 'tower' ? target.row : target.position.row, 
-            col: target.type === 'tower' ? target.col : target.position.col 
+            row: target.type === 'tower' ? (target.row || 0) : (target.position?.row || 0), 
+            col: target.type === 'tower' ? (target.col || 0) : (target.position?.col || 0) 
           };
           setTarget(target.id, targetPosition);
           console.log(`${troop.type} ${troop.id} targeting closest enemy ${target.type} ${target.id} at (${targetPosition.row}, ${targetPosition.col})`);

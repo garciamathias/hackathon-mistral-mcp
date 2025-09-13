@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import React, { useState } from "react";
 import { useGameEngine } from "@/game/useGameEngine";
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
+import { gameEngine } from "@/game/GameEngine";
 
 export default function Arena() {
   const numRows = 34;
@@ -202,6 +203,21 @@ export default function Arena() {
   
   // Obtenir les flagged cells pour le moteur de jeu
   const flaggedCells = getActiveTowersFlaggedCells();
+  
+  // Initialiser les tours dans le GameEngine
+  React.useEffect(() => {
+    // Ajouter toutes les tours au GameEngine
+    Object.values(TOWER).forEach(tower => {
+      gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
+    });
+    
+    return () => {
+      // Nettoyer les tours à la destruction du composant
+      Object.values(TOWER).forEach(tower => {
+        gameEngine.removeTower(tower.id);
+      });
+    };
+  }, []);
   
   // Hook du moteur de jeu
   const { 

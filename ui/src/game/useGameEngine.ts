@@ -3,6 +3,7 @@ import { gameEngine } from './GameEngine';
 import { Giant } from './troops/Giant';
 import { BabyDragon } from './troops/BabyDragon';
 import { BaseTroop, TroopType } from './types/Troop';
+import { Tower } from './types/Tower';
 
 export interface GameHookReturn {
   // Troupes génériques
@@ -16,7 +17,15 @@ export interface GameHookReturn {
   spawnGiantAt: (team: 'red' | 'blue', row: number, col: number) => void;
   spawnBabyDragon: (team: 'red' | 'blue', row: number, col: number) => void;
   // Contrôles du jeu
-  gameStats: any;
+  gameStats: {
+    totalTroops: number;
+    livingTroops: number;
+    redTroops: number;
+    blueTroops: number;
+    gameTime: number;
+    isRunning: boolean;
+    isPaused: boolean;
+  };
   startGame: () => void;
   pauseGame: () => void;
   resumeGame: () => void;
@@ -25,7 +34,7 @@ export interface GameHookReturn {
   isGamePaused: boolean;
 }
 
-export const useGameEngine = (towers?: any[], flaggedCells?: Set<string>): GameHookReturn => {
+export const useGameEngine = (towers?: Tower[], flaggedCells?: Set<string>): GameHookReturn => {
   const [troops, setTroops] = useState<BaseTroop[]>([]);
   const [giants, setGiants] = useState<Giant[]>([]);
   const [babyDragons, setBabyDragons] = useState<BabyDragon[]>([]);
@@ -49,13 +58,6 @@ export const useGameEngine = (towers?: any[], flaggedCells?: Set<string>): GameH
     };
   }, [handleTroopsUpdate]);
 
-  // Connecter les tours au moteur de jeu
-  useEffect(() => {
-    if (towers) {
-      gameEngine.connectTowers(towers);
-    }
-  }, [towers]);
-
   // Connecter les flagged cells au moteur de jeu
   useEffect(() => {
     if (flaggedCells) {
@@ -66,10 +68,6 @@ export const useGameEngine = (towers?: any[], flaggedCells?: Set<string>): GameH
   // Fonctions de contrôle du jeu
   const spawnTroop = useCallback((type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
     gameEngine.spawnTroop(type, team, row, col);
-  }, []);
-
-  const spawnGiant = useCallback((team: 'red' | 'blue') => {
-    gameEngine.spawnGiant(team);
   }, []);
 
   const spawnGiantAt = useCallback((team: 'red' | 'blue', row: number, col: number) => {

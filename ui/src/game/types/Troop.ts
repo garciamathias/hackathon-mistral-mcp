@@ -1,3 +1,5 @@
+import { Tower } from './Tower';
+
 export interface Position {
   row: number;
   col: number;
@@ -35,11 +37,33 @@ export interface BaseTroop {
   lastAttackTime: number;
   focusOnBuildings: boolean;
   flying: boolean;
+  row: number;
+  col: number;
+  // Propriété pour compatibilité avec les entités
+  data?: BaseTroop;
+}
+
+export interface TargetResult {
+  target: {
+    id: string;
+    type: string;
+    row?: number;
+    col?: number;
+    position?: Position;
+    team?: string;
+  };
+  distance: number;
+}
+
+export interface GameEngine {
+  findClosestEnemy(troop: BaseTroop): TargetResult | null;
+  getTowerEntity(id: string): { data: Tower; takeDamage: (damage: number) => void } | undefined;
+  getAllTroops(): BaseTroop[];
 }
 
 export interface TroopEntity {
   data: BaseTroop;
-  update(deltaTime: number, towers: any[], flaggedCells: Set<string>, gameEngine?: any): void;
+  update(deltaTime: number, towers: Tower[], flaggedCells: Set<string>, gameEngine?: GameEngine): void;
 }
 
 // Configuration pour chaque type de troupe
@@ -65,10 +89,11 @@ export interface TroopConfig {
 
 export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
   [TroopType.GIANT]: {
-    maxHealth: 3000,
-    speed: 1.2,
-    attackDamage: 300,
-    attackSpeed: 1.5,
+    // Statistiques niveau 11 officielles Clash Royale
+    maxHealth: 4416, // Points de vie niveau 11
+    speed: 1.2, // Vitesse de déplacement (moyenne)
+    attackDamage: 253, // Dégâts par attaque niveau 11
+    attackSpeed: 1.5, // Vitesse d'attaque (1.5 seconde)
     gifPaths: {
       walk: {
         player: '/images/troops/giant/Giant_walk_player.gif',
@@ -79,15 +104,16 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
         opponent: '/images/troops/giant/Giant_fight_opponent.gif'
       }
     },
-    focusOnBuildings: true,
+    focusOnBuildings: true, // Cible uniquement les bâtiments
     flying: false,
     scale: 3
   },
   [TroopType.BABY_DRAGON]: {
-    maxHealth: 800,
-    speed: 2.0,
-    attackDamage: 200,
-    attackSpeed: 1.8,
+    // Statistiques niveau 11 officielles Clash Royale
+    maxHealth: 1152, // Points de vie niveau 11
+    speed: 2.0, // Vitesse de déplacement (rapide)
+    attackDamage: 161, // Dégâts par attaque niveau 11
+    attackSpeed: 1.5, // Vitesse d'attaque (1.5 seconde)
     gifPaths: {
       walk: {
         player: '/images/troops/babydragon/BabyDragon_walk_player.gif',
