@@ -434,7 +434,12 @@ export default function AIArena() {
                    onDrop={(e) => handleCellDrop(row, col, e)}
                    onDragOver={handleCellDragOver}
                 >
-                  {towerImage && (
+                  {towerImage && (() => {
+                    // Check if tower is dead in GameEngine
+                    const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
+                    const isTowerDead = gameEngineTower && !gameEngineTower.isAlive;
+
+                    return !isTowerDead ? (
                     <>
                       <img
                         src={towerImage}
@@ -454,14 +459,24 @@ export default function AIArena() {
                             ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)}px`,
                         }}
                       >
-                        <TowerHealthBar
-                          currentHealth={tower?.type === 'king' ? 4825 : 3052}
-                          maxHealth={tower?.type === 'king' ? 4825 : 3052}
-                          team={(tower?.team as 'red' | 'blue') || 'red'}
-                        />
+                        {(() => {
+                          // Find actual tower data from GameEngine
+                          const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
+                          const currentHealth = gameEngineTower?.health || (tower?.type === 'king' ? 4825 : 3052);
+                          const maxHealth = gameEngineTower?.maxHealth || (tower?.type === 'king' ? 4825 : 3052);
+
+                          return (
+                            <TowerHealthBar
+                              currentHealth={currentHealth}
+                              maxHealth={maxHealth}
+                              team={(tower?.team as 'red' | 'blue') || 'red'}
+                            />
+                          );
+                        })()}
                       </div>
                     </>
-                  )}
+                    ) : null;
+                  })()}
 
                   {/* Render troops on this cell */}
                   {troops
