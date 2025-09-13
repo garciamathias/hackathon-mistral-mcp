@@ -1,0 +1,11 @@
+{
+  "mcp": {
+    "servers": {
+      "clash-royale": {
+        "command": "python",
+        "args": ["mcp_stdio_server.py"],
+        "cwd": "/Users/eliottvalette/Documents/Heavy Work/MCP-HACKTHON/backend"
+      }
+    }
+  }
+}
