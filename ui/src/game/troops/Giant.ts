@@ -534,7 +534,7 @@ export class GiantEntity {
     // Vérifier si on peut attaquer (cooldown)
     const currentTime = performance.now() / 1000; // Convertir en secondes
     const timeSinceLastAttack = currentTime - this.data.lastAttackTime;
-    const attackCooldown = 1.0 / this.data.attackSpeed; // Temps entre les attaques
+    const attackCooldown = this.data.attackSpeed; // Temps entre les attaques (en secondes)
 
     if (timeSinceLastAttack >= attackCooldown) {
       // Effectuer l'attaque

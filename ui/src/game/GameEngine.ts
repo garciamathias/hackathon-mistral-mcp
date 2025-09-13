@@ -128,7 +128,6 @@ export class GameEngine {
   public getActiveTowers(): Tower[] {
     const allTowers = this.getAllTowers();
     const activeTowers = allTowers.filter(tower => tower.active && tower.isAlive);
-    console.log(`GameEngine.getActiveTowers: ${allTowers.length} total towers, ${activeTowers.length} active towers`);
     return activeTowers;
   }
 
@@ -138,6 +137,10 @@ export class GameEngine {
 
   public getAllTroops(): BaseTroop[] {
     return Array.from(this.troops.values()).map(troop => troop.data);
+  }
+
+  public getTroopEntity(id: string): TroopEntity | undefined {
+    return this.troops.get(id);
   }
 
   public getTroopsByType(type: TroopType): BaseTroop[] {

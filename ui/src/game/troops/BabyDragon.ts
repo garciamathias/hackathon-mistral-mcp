@@ -517,12 +517,14 @@ export class BabyDragonEntity {
 
     // Trouver la cible (peut être une tour ou une troupe)
     let target = null;
+    let targetEntity = null;
     
     // D'abord chercher dans les tours du GameEngine
     if (gameEngine) {
       const towerEntity = gameEngine.getTowerEntity(this.data.towerTarget);
       if (towerEntity) {
         target = { ...towerEntity.data, type: 'tower' };
+        targetEntity = towerEntity;
       }
     }
     
@@ -531,15 +533,19 @@ export class BabyDragonEntity {
       const tower = activeTowers.find(tower => tower.id === this.data.towerTarget);
       if (tower) {
         target = { ...tower, type: 'tower' };
+        // Pour les tours d'activeTowers, on cherche l'entité correspondante
+        if (gameEngine) {
+          targetEntity = gameEngine.getTowerEntity(tower.id);
+        }
       }
     }
     
     // Si pas trouvé dans les tours, chercher dans les troupes du GameEngine
     if (!target && gameEngine) {
-      const troopEntities = gameEngine.getAllTroops();
-      const troopEntity = troopEntities.find(t => t.id === this.data.towerTarget);
-      if (troopEntity) {
-        target = { ...troopEntity, type: 'troop' };
+      const troopEntity = gameEngine.getTroopEntity(this.data.towerTarget);
+      if (troopEntity && troopEntity.data.isAlive) {
+        target = { ...troopEntity.data, type: 'troop' };
+        targetEntity = troopEntity;
       }
     }
     
@@ -569,7 +575,7 @@ export class BabyDragonEntity {
     // Vérifier si on peut attaquer (cooldown)
     const currentTime = performance.now() / 1000; // Convertir en secondes
     const timeSinceLastAttack = currentTime - this.data.lastAttackTime;
-    const attackCooldown = 1.0 / this.data.attackSpeed; // Temps entre les attaques
+    const attackCooldown = this.data.attackSpeed; // Temps entre les attaques (en secondes)
 
     if (timeSinceLastAttack >= attackCooldown) {
       // Effectuer l'attaque
@@ -577,26 +583,25 @@ export class BabyDragonEntity {
       
       // Ici, nous devrions infliger des dégâts à la cible
       // Pour l'instant, on simule juste l'attaque
-      this.performAttack(target);
+      this.performAttack(target, targetEntity);
       
       this.data.lastAttackTime = currentTime;
     }
   }
 
-  private performAttack(target: { id?: string; data?: { id?: string; takeDamage?: (damage: number) => void }; takeDamage?: (damage: number) => void; type?: string }): void {
+  private performAttack(target: any, targetEntity?: any): void {
     // Infliger des dégâts à la cible (tour ou troupe)
-    const targetType = 'type' in target ? target.type : 'troop';
-    const targetId = 'id' in target ? target.id : (target.data ? target.data.id : 'unknown');
+    const targetType = target.type || 'unknown';
+    const targetId = target.id || 'unknown';
     console.log(`Attack performed: BabyDragon ${this.data.id} -> ${targetType} ${targetId}`);
     
-    // Si c'est une entité du GameEngine, utiliser sa méthode takeDamage
-    if ('takeDamage' in target && typeof target.takeDamage === 'function') {
+    // Utiliser l'entité si disponible (elle a les méthodes takeDamage)
+    if (targetEntity && typeof targetEntity.takeDamage === 'function') {
+      targetEntity.takeDamage(this.data.attackDamage);
+    } else if (target && typeof target.takeDamage === 'function') {
       target.takeDamage(this.data.attackDamage);
-    } else if (target.data && 'takeDamage' in target.data && typeof target.data.takeDamage === 'function') {
-      // Si c'est une entité avec data.takeDamage
-      target.data.takeDamage(this.data.attackDamage);
     } else {
-      console.warn(`Target ${targetId} doesn't have takeDamage method! Type: ${typeof target}, Keys: ${Object.keys(target)}`);
+      console.warn(`Target ${targetId} doesn't have takeDamage method! Entity: ${!!targetEntity}, Target keys: ${Object.keys(target || {})}`);
     }
   }
 }

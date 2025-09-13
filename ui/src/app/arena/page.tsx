@@ -36,8 +36,8 @@ export default function Arena() {
     return flaggedCells;
   };
 
-  // Configuration des tours
-  const TOWER = {
+  // Configuration des tours - mémorisé pour éviter les re-rendus
+  const TOWER = React.useMemo(() => ({
     KING_RED: {
       id: 'king_red',
       name: 'King Red',
@@ -196,10 +196,23 @@ export default function Arena() {
       ],
       active: true,
     }
-  };
+  }), []);
 
   // Convertir TOWER en format compatible avec le moteur de jeu
-  const towersForGame = Object.values(TOWER);
+  const towersForGame = Object.values(TOWER).map(tower => ({
+    id: tower.id,
+    type: tower.type as 'king' | 'princess',
+    team: tower.team as 'red' | 'blue',
+    row: tower.row,
+    col: tower.col,
+    health: tower.type === 'king' ? 4824 : 3052,
+    maxHealth: tower.type === 'king' ? 4824 : 3052,
+    isAlive: true,
+    active: true,
+    position: { row: tower.row, col: tower.col },
+    offsetX: tower.offsetX,
+    offsetY: tower.offsetY
+  }));
   
   // Obtenir les flagged cells pour le moteur de jeu
   const flaggedCells = getActiveTowersFlaggedCells();
@@ -217,17 +230,14 @@ export default function Arena() {
         gameEngine.removeTower(tower.id);
       });
     };
-  }, []);
+  }, [TOWER]);
   
   // Hook du moteur de jeu
   const { 
     troops,
-    giants, 
-    babyDragons,
+    towers: gameEngineTowers,
     gameStats, 
     spawnTroop,
-    spawnGiantAt,
-    spawnBabyDragon,
     startGame, 
     pauseGame, 
     resumeGame, 
@@ -367,12 +377,21 @@ export default function Arena() {
                           top: `${(tower as any).type === 'king' ? -60 : (tower as any).offsetY - 40}px`,
                         }}
                       >
-                        <TowerHealthBar
-                          currentHealth={tower?.type === 'king' ? 4825 : 3052}
-                          maxHealth={tower?.type === 'king' ? 4825 : 3052}
-                          isKing={tower?.type === 'king'}
-                          team={(tower?.team as 'red' | 'blue') || 'red'}
-                        />
+                        {(() => {
+                          // Trouver les données réelles de la tour dans le GameEngine
+                          const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
+                          const currentHealth = gameEngineTower?.health || (tower?.type === 'king' ? 4825 : 3052);
+                          const maxHealth = gameEngineTower?.maxHealth || (tower?.type === 'king' ? 4825 : 3052);
+                          
+                          return (
+                            <TowerHealthBar
+                              currentHealth={currentHealth}
+                              maxHealth={maxHealth}
+                              isKing={tower?.type === 'king'}
+                              team={(tower?.team as 'red' | 'blue') || 'red'}
+                            />
+                          );
+                        })()}
                       </div>
                     </>
                   )}

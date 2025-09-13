@@ -93,7 +93,7 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
     maxHealth: 4416, // Points de vie niveau 11
     speed: 1.2, // Vitesse de déplacement (moyenne)
     attackDamage: 253, // Dégâts par attaque niveau 11
-    attackSpeed: 1.5, // Vitesse d'attaque (1.5 seconde)
+    attackSpeed: 1.9, // Vitesse d'attaque (1.9 seconde)
     gifPaths: {
       walk: {
         player: '/images/troops/giant/Giant_walk_player.gif',
@@ -113,7 +113,7 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
     maxHealth: 1152, // Points de vie niveau 11
     speed: 2.0, // Vitesse de déplacement (rapide)
     attackDamage: 161, // Dégâts par attaque niveau 11
-    attackSpeed: 1.5, // Vitesse d'attaque (1.5 seconde)
+    attackSpeed: 1.05, // Vitesse d'attaque (1.05 seconde)
     gifPaths: {
       walk: {
         player: '/images/troops/babydragon/BabyDragon_walk_player.gif',
