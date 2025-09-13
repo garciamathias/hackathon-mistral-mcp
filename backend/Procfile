@@ -1,1 +1,1 @@
-web: python run_server.py
+web: python mcp_stdio_server.py
