@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Serveur MCP STDIO pour Clash Royale
-Compatible avec l'API Mistral MCP (MCPClientSTDIO)
+Serveur MCP officiel pour Clash Royale
+Compatible avec le SDK MCP officiel et Alpic.ai
 """
 
 import asyncio
@@ -11,12 +11,17 @@ from typing import Dict, Any, List
 from datetime import datetime
 import logging
 
+# Import du SDK MCP officiel
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import Tool, TextContent, CallToolResult
+
 # Configuration des logs
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 class ClashRoyaleMCPServer:
-    """Serveur MCP STDIO pour Clash Royale compatible Mistral"""
+    """Serveur MCP officiel pour Clash Royale compatible Alpic.ai"""
     
     def __init__(self):
         self.game_state = {
@@ -39,130 +44,7 @@ class ClashRoyaleMCPServer:
             {"id": "red_princess_right", "team": "red", "type": "princess", "health": 3052, "maxHealth": 3052, "row": 26, "col": 15}
         ]
 
-    async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Traite les requêtes MCP de Mistral"""
-        try:
-            method = request.get("method")
-            params = request.get("params", {})
-            
-            if method == "tools/list":
-                return await self._list_tools()
-            elif method == "tools/call":
-                return await self._call_tool(params)
-            else:
-                return {"error": {"code": -32601, "message": f"Method not found: {method}"}}
-                
-        except Exception as e:
-            logger.error(f"Error handling request: {e}")
-            return {"error": {"code": -32603, "message": str(e)}}
-
-    async def _list_tools(self) -> Dict[str, Any]:
-        """Liste les outils disponibles pour Mistral"""
-        return {
-            "tools": [
-                {
-                    "name": "start_game",
-                    "description": "Démarre une nouvelle partie de Clash Royale",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                },
-                {
-                    "name": "deploy_troop",
-                    "description": "Déploie une troupe sur le terrain (Mistral joue en équipe rouge)",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "troopType": {
-                                "type": "string",
-                                "enum": ["giant", "babyDragon", "miniPekka", "valkyrie"],
-                                "description": "Type de troupe à déployer"
-                            },
-                            "row": {
-                                "type": "number",
-                                "description": "Position ligne (0-15 pour équipe rouge de Mistral)"
-                            },
-                            "col": {
-                                "type": "number",
-                                "description": "Position colonne (0-17)"
-                            }
-                        },
-                        "required": ["troopType", "row", "col"]
-                    }
-                },
-                {
-                    "name": "get_game_state",
-                    "description": "Récupère l'état actuel du jeu avec toutes les troupes et tours",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                },
-                {
-                    "name": "analyze_battlefield",
-                    "description": "Analyse la situation tactique actuelle pour prendre des décisions stratégiques",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                },
-                {
-                    "name": "get_troop_stats",
-                    "description": "Récupère les statistiques détaillées d'un type de troupe",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "troopType": {
-                                "type": "string",
-                                "enum": ["giant", "babyDragon", "miniPekka", "valkyrie"]
-                            }
-                        },
-                        "required": ["troopType"]
-                    }
-                },
-                {
-                    "name": "suggest_counter",
-                    "description": "Suggère une contre-stratégie basée sur les troupes ennemies",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "enemyTroops": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                                "description": "Types de troupes ennemies à contrer"
-                            }
-                        },
-                        "required": ["enemyTroops"]
-                    }
-                }
-            ]
-        }
-
-    async def _call_tool(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Exécute un outil demandé par Mistral"""
-        tool_name = params.get("name")
-        arguments = params.get("arguments", {})
-        
-        if tool_name == "start_game":
-            return await self._start_game()
-        elif tool_name == "deploy_troop":
-            return await self._deploy_troop(arguments)
-        elif tool_name == "get_game_state":
-            return await self._get_game_state()
-        elif tool_name == "analyze_battlefield":
-            return await self._analyze_battlefield()
-        elif tool_name == "get_troop_stats":
-            return await self._get_troop_stats(arguments)
-        elif tool_name == "suggest_counter":
-            return await self._suggest_counter(arguments)
-        else:
-            return {"error": {"code": -32601, "message": f"Tool not found: {tool_name}"}}
-
-    async def _start_game(self) -> Dict[str, Any]:
+    async def start_game(self) -> Dict[str, Any]:
         """Démarre une nouvelle partie"""
         self.game_state["isRunning"] = True
         self.game_state["gameTime"] = 0
@@ -170,27 +52,16 @@ class ClashRoyaleMCPServer:
         self.troop_counter = 0
         
         return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps({
-                        "status": "Partie démarrée!",
-                        "message": "Vous êtes Mistral AI (équipe rouge). L'humain joue en équipe bleue.",
-                        "gameState": self.game_state
-                    }, indent=2, ensure_ascii=False)
-                }
-            ]
+            "status": "Partie démarrée!",
+            "message": "Vous êtes Mistral AI (équipe rouge). L'humain joue en équipe bleue.",
+            "gameState": self.game_state
         }
 
-    async def _deploy_troop(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    async def deploy_troop(self, troop_type: str, row: int, col: int) -> Dict[str, Any]:
         """Déploie une troupe pour Mistral (équipe rouge)"""
-        troop_type = args.get("troopType")
-        row = args.get("row")
-        col = args.get("col")
-        
         # Validation
         if row > 15:
-            return {"error": {"code": -32602, "message": "Mistral (équipe rouge) ne peut déployer que sur les lignes 0-15"}}
+            raise ValueError("Mistral (équipe rouge) ne peut déployer que sur les lignes 0-15")
         
         # Statistiques des troupes
         troop_stats = {
@@ -220,42 +91,28 @@ class ClashRoyaleMCPServer:
         self.game_state["troops"].append(troop)
         
         return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps({
-                        "status": "Troupe déployée!",
-                        "troop": troop,
-                        "message": f"Mistral AI a déployé {troop_type} en position ({row}, {col})",
-                        "currentTroops": len(self.game_state["troops"])
-                    }, indent=2, ensure_ascii=False)
-                }
-            ]
+            "status": "Troupe déployée!",
+            "troop": troop,
+            "message": f"Mistral AI a déployé {troop_type} en position ({row}, {col})",
+            "currentTroops": len(self.game_state["troops"])
         }
 
-    async def _get_game_state(self) -> Dict[str, Any]:
+    async def get_game_state(self) -> Dict[str, Any]:
         """Récupère l'état complet du jeu"""
         red_troops = [t for t in self.game_state["troops"] if t["team"] == "red"]
         blue_troops = [t for t in self.game_state["troops"] if t["team"] == "blue"]
         
         return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps({
-                        "gameState": self.game_state,
-                        "analysis": {
-                            "totalTroops": len(self.game_state["troops"]),
-                            "mistralTroops": len(red_troops),
-                            "humanTroops": len(blue_troops),
-                            "activeTowers": len([t for t in self.game_state["towers"] if t["health"] > 0])
-                        }
-                    }, indent=2, ensure_ascii=False)
-                }
-            ]
+            "gameState": self.game_state,
+            "analysis": {
+                "totalTroops": len(self.game_state["troops"]),
+                "mistralTroops": len(red_troops),
+                "humanTroops": len(blue_troops),
+                "activeTowers": len([t for t in self.game_state["towers"] if t["health"] > 0])
+            }
         }
 
-    async def _analyze_battlefield(self) -> Dict[str, Any]:
+    async def analyze_battlefield(self) -> Dict[str, Any]:
         """Analyse tactique du champ de bataille"""
         red_troops = [t for t in self.game_state["troops"] if t["team"] == "red"]
         blue_troops = [t for t in self.game_state["troops"] if t["team"] == "blue"]
@@ -275,14 +132,7 @@ class ClashRoyaleMCPServer:
             "recommendation": self._get_tactical_recommendation(red_troops, blue_troops)
         }
         
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(analysis, indent=2, ensure_ascii=False)
-                }
-            ]
-        }
+        return analysis
 
     def _get_tactical_recommendation(self, red_troops: List, blue_troops: List) -> str:
         """Génère une recommandation tactique"""
@@ -300,10 +150,8 @@ class ClashRoyaleMCPServer:
         else:
             return "Situation équilibrée. Adaptez votre stratégie selon l'évolution."
 
-    async def _get_troop_stats(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_troop_stats(self, troop_type: str) -> Dict[str, Any]:
         """Récupère les stats d'une troupe"""
-        troop_type = args.get("troopType")
-        
         stats = {
             "giant": {
                 "name": "Giant",
@@ -343,19 +191,10 @@ class ClashRoyaleMCPServer:
             }
         }
         
-        return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(stats.get(troop_type, {"error": "Type de troupe inconnu"}), indent=2, ensure_ascii=False)
-                }
-            ]
-        }
+        return stats.get(troop_type, {"error": "Type de troupe inconnu"})
 
-    async def _suggest_counter(self, args: Dict[str, Any]) -> Dict[str, Any]:
+    async def suggest_counter(self, enemy_troops: List[str]) -> Dict[str, Any]:
         """Suggère des contre-stratégies"""
-        enemy_troops = args.get("enemyTroops", [])
-        
         counters = {
             "giant": ["miniPekka", "valkyrie"],
             "babyDragon": ["valkyrie", "giant"],
@@ -372,54 +211,150 @@ class ClashRoyaleMCPServer:
         unique_suggestions = list(set(suggestions))
         
         return {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps({
-                        "enemyTroops": enemy_troops,
-                        "recommendedCounters": unique_suggestions,
-                        "strategy": f"Pour contrer {', '.join(enemy_troops)}, utilisez: {', '.join(unique_suggestions)}"
-                    }, indent=2, ensure_ascii=False)
-                }
-            ]
+            "enemyTroops": enemy_troops,
+            "recommendedCounters": unique_suggestions,
+            "strategy": f"Pour contrer {', '.join(enemy_troops)}, utilisez: {', '.join(unique_suggestions)}"
         }
 
-async def main():
-    """Point d'entrée principal du serveur STDIO"""
-    server = ClashRoyaleMCPServer()
-    
-    logger.info("🎮 Clash Royale MCP STDIO Server started")
-    
+# Instance globale du serveur
+game_server = ClashRoyaleMCPServer()
+
+# Création du serveur MCP officiel
+server = Server("clash-royale-mcp")
+
+@server.list_tools()
+async def list_tools() -> List[Tool]:
+    """Liste tous les outils disponibles pour Mistral"""
+    return [
+        Tool(
+            name="start_game",
+            description="Démarre une nouvelle partie de Clash Royale",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="deploy_troop",
+            description="Déploie une troupe sur le terrain (Mistral joue en équipe rouge)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "troopType": {
+                        "type": "string",
+                        "enum": ["giant", "babyDragon", "miniPekka", "valkyrie"],
+                        "description": "Type de troupe à déployer"
+                    },
+                    "row": {
+                        "type": "number",
+                        "description": "Position ligne (0-15 pour équipe rouge de Mistral)"
+                    },
+                    "col": {
+                        "type": "number",
+                        "description": "Position colonne (0-17)"
+                    }
+                },
+                "required": ["troopType", "row", "col"]
+            }
+        ),
+        Tool(
+            name="get_game_state",
+            description="Récupère l'état actuel du jeu avec toutes les troupes et tours",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="analyze_battlefield",
+            description="Analyse la situation tactique actuelle pour prendre des décisions stratégiques",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="get_troop_stats",
+            description="Récupère les statistiques détaillées d'un type de troupe",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "troopType": {
+                        "type": "string",
+                        "enum": ["giant", "babyDragon", "miniPekka", "valkyrie"]
+                    }
+                },
+                "required": ["troopType"]
+            }
+        ),
+        Tool(
+            name="suggest_counter",
+            description="Suggère une contre-stratégie basée sur les troupes ennemies",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "enemyTroops": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Types de troupes ennemies à contrer"
+                    }
+                },
+                "required": ["enemyTroops"]
+            }
+        )
+    ]
+
+@server.call_tool()
+async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    """Exécute un outil demandé par Mistral"""
     try:
-        while True:
-            # Lire depuis stdin
-            line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-            if not line:
-                break
-                
-            try:
-                request = json.loads(line.strip())
-                response = await server.handle_request(request)
-                
-                # Ajouter l'ID de la requête si présent
-                if "id" in request:
-                    response["id"] = request["id"]
-                
-                # Envoyer la réponse via stdout
-                print(json.dumps(response, ensure_ascii=False))
-                sys.stdout.flush()
-                
-            except json.JSONDecodeError:
-                error_response = {
-                    "error": {"code": -32700, "message": "Parse error"}
-                }
-                print(json.dumps(error_response))
-                sys.stdout.flush()
-                
-    except KeyboardInterrupt:
-        logger.info("🛑 Server stopped by user")
+        if name == "start_game":
+            result = await game_server.start_game()
+            
+        elif name == "deploy_troop":
+            result = await game_server.deploy_troop(
+                arguments["troopType"],
+                arguments["row"], 
+                arguments["col"]
+            )
+            
+        elif name == "get_game_state":
+            result = await game_server.get_game_state()
+            
+        elif name == "analyze_battlefield":
+            result = await game_server.analyze_battlefield()
+            
+        elif name == "get_troop_stats":
+            result = await game_server.get_troop_stats(arguments["troopType"])
+            
+        elif name == "suggest_counter":
+            result = await game_server.suggest_counter(arguments["enemyTroops"])
+            
+        else:
+            raise ValueError(f"Outil inconnu: {name}")
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+        
     except Exception as e:
-        logger.error(f"❌ Server error: {e}")
+        error_result = {
+            "error": str(e),
+            "tool": name,
+            "arguments": arguments
+        }
+        return [TextContent(type="text", text=json.dumps(error_result, indent=2, ensure_ascii=False))]
+
+async def main():
+    """Point d'entrée principal du serveur MCP"""
+    logger.info("🎮 Clash Royale MCP Server started")
+    
+    async with stdio_server() as streams:
+        await server.run(
+            streams[0], streams[1], 
+            server.create_initialization_options()
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())

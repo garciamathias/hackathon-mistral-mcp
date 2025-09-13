@@ -1,3 +1,3 @@
-# Dépendances minimales pour serveur MCP STDIO
-# Pas de FastAPI, WebSocket, ou autres dépendances lourdes
-# Alpic.ai gère l'infrastructure
+# Dépendances pour serveur MCP officiel
+mcp>=1.0.0
+asyncio

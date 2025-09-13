@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Test du serveur MCP STDIO pour Mistral AI
-Simule les interactions que Mistral aurait avec le serveur
+Test du serveur MCP officiel pour Mistral AI
+Utilise le SDK MCP officiel
 """
 
 import asyncio
@@ -25,7 +25,7 @@ class MistralMCPTester:
             text=True,
             bufsize=0
         )
-        print("🎮 Serveur MCP STDIO démarré")
+        print("🎮 Serveur MCP officiel démarré")
 
     async def send_request(self, method: str, params: Dict[str, Any] = None, request_id: int = 1) -> Dict[str, Any]:
         """Envoie une requête au serveur MCP"""
@@ -53,22 +53,46 @@ class MistralMCPTester:
         else:
             raise RuntimeError("Pas de réponse du serveur")
 
-    async def test_full_game_scenario(self):
-        """Test d'un scénario complet de jeu"""
-        print("🧪 Test du scénario complet Mistral vs Humain")
-        print("=" * 60)
+    async def test_mcp_server(self):
+        """Test du serveur MCP officiel"""
+        print("🧪 Test du serveur MCP officiel")
+        print("=" * 50)
 
         try:
-            # Test 1: Lister les outils disponibles
-            print("\n📋 Test 1: Lister les outils MCP...")
+            # Test 1: Initialisation
+            print("\n🔧 Test 1: Initialisation MCP...")
+            init_request = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {
+                        "name": "test-client",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+            
+            self.process.stdin.write(json.dumps(init_request) + "\n")
+            self.process.stdin.flush()
+            
+            response_line = self.process.stdout.readline()
+            if response_line:
+                response = json.loads(response_line.strip())
+                print(f"✅ Initialisation: {response.get('result', {}).get('serverInfo', {}).get('name', 'Unknown')}")
+
+            # Test 2: Lister les outils
+            print("\n📋 Test 2: Lister les outils MCP...")
             response = await self.send_request("tools/list")
             tools = response.get("tools", [])
             print(f"✅ {len(tools)} outils disponibles:")
             for tool in tools:
                 print(f"   - {tool['name']}: {tool['description']}")
 
-            # Test 2: Démarrer une partie
-            print("\n🎮 Test 2: Démarrer une partie...")
+            # Test 3: Démarrer une partie
+            print("\n🎮 Test 3: Démarrer une partie...")
             response = await self.send_request("tools/call", {
                 "name": "start_game",
                 "arguments": {}
@@ -78,28 +102,8 @@ class MistralMCPTester:
                 content = json.loads(response["content"][0]["text"])
                 print(f"   Status: {content.get('status')}")
 
-            # Test 3: Analyser le champ de bataille
-            print("\n🔍 Test 3: Analyser la situation...")
-            response = await self.send_request("tools/call", {
-                "name": "analyze_battlefield",
-                "arguments": {}
-            })
-            if "content" in response:
-                analysis = json.loads(response["content"][0]["text"])
-                print(f"✅ Analyse: {analysis.get('recommendation')}")
-
-            # Test 4: Obtenir les stats d'une troupe
-            print("\n📊 Test 4: Stats du Giant...")
-            response = await self.send_request("tools/call", {
-                "name": "get_troop_stats",
-                "arguments": {"troopType": "giant"}
-            })
-            if "content" in response:
-                stats = json.loads(response["content"][0]["text"])
-                print(f"✅ Giant: {stats.get('health')} HP, {stats.get('damage')} DMG")
-
-            # Test 5: Déployer une troupe (Mistral joue)
-            print("\n🏗️  Test 5: Mistral déploie un Giant...")
+            # Test 4: Déployer une troupe
+            print("\n🏗️  Test 4: Mistral déploie un Giant...")
             response = await self.send_request("tools/call", {
                 "name": "deploy_troop",
                 "arguments": {
@@ -112,32 +116,17 @@ class MistralMCPTester:
                 deployment = json.loads(response["content"][0]["text"])
                 print(f"✅ Déploiement: {deployment.get('message')}")
 
-            # Test 6: Suggérer des contre-attaques
-            print("\n⚔️  Test 6: Suggérer contre-attaque...")
+            # Test 5: Analyser le champ de bataille
+            print("\n🔍 Test 5: Analyser la situation...")
             response = await self.send_request("tools/call", {
-                "name": "suggest_counter",
-                "arguments": {
-                    "enemyTroops": ["babyDragon", "miniPekka"]
-                }
-            })
-            if "content" in response:
-                counter = json.loads(response["content"][0]["text"])
-                print(f"✅ Contre-stratégie: {counter.get('strategy')}")
-
-            # Test 7: État final du jeu
-            print("\n🎯 Test 7: État final du jeu...")
-            response = await self.send_request("tools/call", {
-                "name": "get_game_state",
+                "name": "analyze_battlefield",
                 "arguments": {}
             })
             if "content" in response:
-                state = json.loads(response["content"][0]["text"])
-                analysis = state.get("analysis", {})
-                print(f"✅ Troupes totales: {analysis.get('totalTroops')}")
-                print(f"   Troupes Mistral: {analysis.get('mistralTroops')}")
-                print(f"   Troupes Humain: {analysis.get('humanTroops')}")
+                analysis = json.loads(response["content"][0]["text"])
+                print(f"✅ Analyse: {analysis.get('recommendation')}")
 
-            print("\n🎉 Tous les tests réussis!")
+            print("\n🎉 Tests du serveur MCP officiel réussis!")
 
         except Exception as e:
             print(f"❌ Erreur lors des tests: {e}")
@@ -156,7 +145,7 @@ async def main():
     try:
         await tester.start_server()
         await asyncio.sleep(1)  # Laisser le serveur démarrer
-        await tester.test_full_game_scenario()
+        await tester.test_mcp_server()
     finally:
         await tester.stop_server()
 
