@@ -243,7 +243,7 @@ export class GameEngine {
     }
   };
 
-  private update(deltaTime: number): void {
+  protected update(deltaTime: number): void {
     // Nettoyer les troupes mortes
     this.cleanupDeadTroops();
     
@@ -264,11 +264,18 @@ export class GameEngine {
     }
   }
 
-  private cleanupDeadTroops(): void {
+  protected cleanupDeadTroops(): void {
     const deadTroops = Array.from(this.troops.entries())
-      .filter(([, troop]) => !troop.data.isAlive)
+      .filter(([, troop]) => {
+        // Add safety check for data property
+        if (!troop || !troop.data) {
+          console.warn('Troop missing data property:', troop);
+          return false;
+        }
+        return !troop.data.isAlive;
+      })
       .map(([id, ]) => id);
-    
+
     for (const id of deadTroops) {
       this.troops.delete(id);
     }
@@ -278,12 +285,13 @@ export class GameEngine {
     // Vérifier si une King Tower est détruite
     const kingRed = this.towers.get('king_red');
     const kingBlue = this.towers.get('king_blue');
-    
-    if (kingRed && !kingRed.data.isAlive) {
+
+    // Add safety checks for tower data
+    if (kingRed && kingRed.data && !kingRed.data.isAlive) {
       // King Rouge détruite → Bleu gagne
       console.log('Game Over: Blue team wins! King Red destroyed');
       this.endGame('blue');
-    } else if (kingBlue && !kingBlue.data.isAlive) {
+    } else if (kingBlue && kingBlue.data && !kingBlue.data.isAlive) {
       // King Bleue détruite → Rouge gagne
       console.log('Game Over: Red team wins! King Blue destroyed');
       this.endGame('red');
