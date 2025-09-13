@@ -9,6 +9,22 @@ export default function Arena() {
   const numCols = 18;
 
   const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
+  const [highlightFlaggedCells, setHighlightFlaggedCells] = useState<boolean>(false);
+   
+  // Fonction pour obtenir toutes les cellules marquées des tours actives
+  const getActiveTowersFlaggedCells = () => {
+    const flaggedCells = new Set<string>();
+    
+    Object.values(TOWER).forEach(tower => {
+      if (tower.active && tower.flagged_cells) {
+        tower.flagged_cells.forEach(([row, col]) => {
+          flaggedCells.add(`${row}-${col}`);
+        });
+      }
+    });
+    
+    return flaggedCells;
+  };
 
   // Configuration des tours
   const TOWER = {
@@ -23,6 +39,24 @@ export default function Arena() {
       offsetY: -2,
       team: 'red',
       type: 'king',
+      flagged_cells: [
+        [1, 7],
+        [1, 8],
+        [1, 9],
+        [1, 10],
+        [2, 10],
+        [2, 9],
+        [2, 8],
+        [2, 7],
+        [3, 7],
+        [3, 8],
+        [3, 9],
+        [3, 10],
+        [4, 10],
+        [4, 9],
+        [4, 8],
+        [4, 7],
+      ],
       active: true,
     },
     PRINCESS_RED_1: {
@@ -36,6 +70,17 @@ export default function Arena() {
       offsetY: -2.3,
       team: 'red',
       type: 'princess',
+      flagged_cells: [
+        [5, 2],
+        [5, 3],
+        [5, 4],
+        [6, 4],
+        [7, 4],
+        [7, 3],
+        [7, 2],
+        [6, 2],
+        [6, 3],
+      ],
       active: true,
     },
     PRINCESS_RED_2: {
@@ -49,6 +94,17 @@ export default function Arena() {
       offsetY: -2.3,
       team: 'red',
       type: 'princess',
+      flagged_cells: [
+        [5, 13],
+        [5, 14],
+        [5, 15],
+        [6, 15],
+        [6, 14],
+        [6, 13],
+        [7, 13],
+        [7, 14],
+        [7, 15],
+      ],
       active: true,
     },
     PRINCESS_BLUE_1: {
@@ -62,6 +118,17 @@ export default function Arena() {
       offsetY: -2,
       team: 'blue',
       type: 'princess',
+      flagged_cells: [
+        [26, 2],
+        [26, 3],
+        [26, 4],
+        [27, 4],
+        [27, 3],
+        [27, 2],
+        [28, 2],
+        [28, 3],
+        [28, 4],
+      ],
       active: true,
     },
     PRINCESS_BLUE_2: {
@@ -75,6 +142,17 @@ export default function Arena() {
       offsetY: -2,
       team: 'blue',
       type: 'princess',
+      flagged_cells: [
+        [26, 13],
+        [26, 14],
+        [26, 15],
+        [27, 15],
+        [27, 14],
+        [27, 13],
+        [28, 13],
+        [28, 14],
+        [28, 15],
+      ],
       active: true,
     },
     KING_BLUE: {
@@ -88,6 +166,24 @@ export default function Arena() {
       offsetY: -2,
       team: 'blue',
       type: 'king',
+      flagged_cells: [
+        [29, 7],
+        [30, 7],
+        [31, 7],
+        [32, 7],
+        [32, 8],
+        [31, 8],
+        [30, 8],
+        [29, 8],
+        [29, 9],
+        [29, 10],
+        [30, 10],
+        [30, 9],
+        [31, 9],
+        [31, 10],
+        [32, 10],
+        [32, 9],
+      ],
       active: true,
     }
   };
@@ -131,15 +227,21 @@ export default function Arena() {
               const towerImage = shouldShowTower ? towerPosition.image : null;
               const tower = towerPosition;
               
+              // Vérifier si cette cellule est marquée par une tour active
+              const flaggedCells = getActiveTowersFlaggedCells();
+              const isFlagged = flaggedCells.has(`${row}-${col}`);
+              
               return (
                 <div
                   key={index}
                   className={`w-full h-full cursor-pointer transition-all duration-200 relative ${
-                    visbleGrid 
-                      ? (isEven 
-                          ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
-                          : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50')
-                      : 'hover:ring-2 ring-yellow-400 ring-opacity-50'
+                    highlightFlaggedCells && isFlagged
+                      ? 'bg-red-500/70 hover:bg-red-400/80 hover:ring-2 ring-red-300'
+                      : visbleGrid 
+                        ? (isEven 
+                            ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
+                            : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50')
+                        : 'hover:ring-2 ring-yellow-400 ring-opacity-50'
                   }`}
                   onClick={() => {
                     console.log(`Cell ${row}, ${col}`);
@@ -175,9 +277,17 @@ export default function Arena() {
             variant="secondary" 
             className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
             onClick={() => setVisbleGrid(!visbleGrid)}
-        >
-            Visible Grid
-        </Button>
+            >
+                Visible Grid
+          </Button>
+          <Button 
+            variant="secondary" 
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+            onClick={() => setHighlightFlaggedCells(!highlightFlaggedCells)}
+            >
+                Highlight Flagged Cells
+          </Button>
+
         </div>
       </div>
     </div>
