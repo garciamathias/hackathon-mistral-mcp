@@ -232,7 +232,15 @@ export class GameEngine {
     this.gameState.lastUpdateTime = currentTime;
     this.gameState.gameTime += deltaTime;
     
-    this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    // Utiliser setTimeout pour l'environnement serveur, requestAnimationFrame pour le client
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    } else {
+      // Environnement serveur - utiliser setTimeout
+      setTimeout(() => {
+        this.gameLoop();
+      }, 16); // ~60 FPS
+    }
   };
 
   private update(deltaTime: number): void {
