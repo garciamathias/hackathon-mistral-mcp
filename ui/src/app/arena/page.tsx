@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useGameEngine } from "@/game/useGameEngine";
 
 export default function Arena() {
   const numRows = 34;
@@ -10,6 +11,10 @@ export default function Arena() {
 
   const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
   const [highlightFlaggedCells, setHighlightFlaggedCells] = useState<boolean>(false);
+  const [spawnMode, setSpawnMode] = useState<{active: boolean, team: 'red' | 'blue' | null}>({
+    active: false,
+    team: null
+  });
    
   // Fonction pour obtenir toutes les cellules marquées des tours actives
   const getActiveTowersFlaggedCells = () => {
@@ -188,6 +193,44 @@ export default function Arena() {
     }
   };
 
+  // Convertir TOWER en format compatible avec le moteur de jeu
+  const towersForGame = Object.values(TOWER);
+  
+  // Obtenir les flagged cells pour le moteur de jeu
+  const flaggedCells = getActiveTowersFlaggedCells();
+  
+  // Hook du moteur de jeu
+  const { 
+    giants, 
+    gameStats, 
+    spawnGiant,
+    spawnGiantAt,
+    startGame, 
+    pauseGame, 
+    resumeGame, 
+    stopGame,
+    isGameRunning,
+    isGamePaused 
+  } = useGameEngine(towersForGame, flaggedCells);
+
+  // Fonctions pour le mode spawn
+  const activateSpawnMode = (team: 'red' | 'blue') => {
+    setSpawnMode({ active: true, team });
+  };
+
+  const deactivateSpawnMode = () => {
+    setSpawnMode({ active: false, team: null });
+  };
+
+  const handleCellClick = (row: number, col: number) => {
+    if (spawnMode.active && spawnMode.team && isGameRunning) {
+      spawnGiantAt(spawnMode.team, row, col);
+      deactivateSpawnMode();
+    } else {
+      console.log(`Cell ${row}, ${col}`);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
       {/* Fond flou */}
@@ -234,7 +277,15 @@ export default function Arena() {
               return (
                 <div
                   key={index}
-                  className={`w-full h-full cursor-pointer transition-all duration-200 relative ${
+                  className={`w-full h-full transition-all duration-200 relative ${
+                    spawnMode.active 
+                      ? `cursor-crosshair ${
+                          spawnMode.team === 'red' 
+                            ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' 
+                            : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'
+                        }`
+                      : 'cursor-pointer'
+                  } ${
                     highlightFlaggedCells && isFlagged
                       ? 'bg-red-500/70 hover:bg-red-400/80 hover:ring-2 ring-red-300'
                       : visbleGrid 
@@ -243,9 +294,7 @@ export default function Arena() {
                             : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50')
                         : 'hover:ring-2 ring-yellow-400 ring-opacity-50'
                   }`}
-                  onClick={() => {
-                    console.log(`Cell ${row}, ${col}`);
-                  }}
+                  onClick={() => handleCellClick(row, col)}
                 >
                   {towerImage && (
                     <img
@@ -257,38 +306,161 @@ export default function Arena() {
                       }}
                     />
                   )}
+                  
+                  {/* Rendu des Giants sur cette cellule */}
+                  {giants
+                    .filter(giant => 
+                      Math.floor(giant.position.row) === row && 
+                      Math.floor(giant.position.col) === col
+                    )
+                    .map(giant => (
+                      <div
+                        key={giant.id}
+                        className={`absolute z-20 w-full h-full flex items-center justify-center pointer-events-none`}
+                        style={{
+                          transform: `translate(${(giant.position.col - Math.floor(giant.position.col)) * 100}%, ${(giant.position.row - Math.floor(giant.position.row)) * 100}%)`
+                        }}
+                      >
+                        <div 
+                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold ${
+                            giant.team === 'red' 
+                              ? 'bg-red-500 border-red-700 text-white' 
+                              : 'bg-blue-500 border-blue-700 text-white'
+                          }`}
+                        >
+                          G
+                        </div>
+                        {/* Barre de vie */}
+                        <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
+                          <div 
+                            className={`h-full rounded ${giant.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
+                            style={{ width: `${(giant.health / giant.maxHealth) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  }
                 </div>
               );
             })}
           </div>
         </div>
         
-        {/* Bouton retour au menu principal */}
-        <div className="absolute top-4 left-4 z-10">
-          <Link href="/">
+        {/* Contrôles du jeu */}
+        <div className="absolute top-4 left-4 z-10 space-y-2">
+          <div className="space-x-2">
+            <Link href="/">
+              <Button 
+                variant="secondary" 
+                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+              >
+                ← Retour au Menu
+              </Button>
+            </Link>
             <Button 
               variant="secondary" 
               className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+              onClick={() => setVisbleGrid(!visbleGrid)}
             >
-              ← Retour au Menu
+              Visible Grid
             </Button>
-          </Link>
-          <Button 
-            variant="secondary" 
-            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-            onClick={() => setVisbleGrid(!visbleGrid)}
+            <Button 
+              variant="secondary" 
+              className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+              onClick={() => setHighlightFlaggedCells(!highlightFlaggedCells)}
             >
-                Visible Grid
-          </Button>
-          <Button 
-            variant="secondary" 
-            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-            onClick={() => setHighlightFlaggedCells(!highlightFlaggedCells)}
-            >
-                Highlight Flagged Cells
-          </Button>
-
+              Highlight Flagged Cells
+            </Button>
+          </div>
+          
+          {/* Contrôles de jeu */}
+          <div className="space-x-2">
+            {!isGameRunning ? (
+              <Button 
+                variant="secondary" 
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                onClick={startGame}
+              >
+                Start Game
+              </Button>
+            ) : (
+              <>
+                {isGamePaused ? (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={resumeGame}
+                  >
+                    Resume
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={pauseGame}
+                  >
+                    Pause
+                  </Button>
+                )}
+                <Button 
+                  variant="secondary" 
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                  onClick={stopGame}
+                >
+                  Stop
+                </Button>
+              </>
+            )}
+          </div>
+          
+          {/* Spawn Giants */}
+          {isGameRunning && (
+            <div className="space-x-2">
+              {!spawnMode.active ? (
+                <>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('red')}
+                  >
+                    Spawn Red Giant
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={() => activateSpawnMode('blue')}
+                  >
+                    Spawn Blue Giant
+                  </Button>
+                </>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span className={`text-sm font-bold ${spawnMode.team === 'red' ? 'text-red-400' : 'text-blue-400'}`}>
+                    Click on a cell to spawn {spawnMode.team} giant
+                  </span>
+                  <Button 
+                    variant="secondary" 
+                    className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded transition-colors duration-200"
+                    onClick={deactivateSpawnMode}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+        
+        {/* Stats du jeu */}
+        {isGameRunning && (
+          <div className="absolute top-4 right-4 z-10 bg-black/70 text-white p-4 rounded-lg">
+            <div className="text-sm space-y-1">
+              <div>Giants: {gameStats.livingGiants}/{gameStats.totalGiants}</div>
+              <div>Red: {gameStats.redGiants} | Blue: {gameStats.blueGiants}</div>
+              <div>Time: {Math.floor(gameStats.gameTime)}s</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
