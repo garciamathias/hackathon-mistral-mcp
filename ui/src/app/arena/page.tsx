@@ -244,8 +244,11 @@ export default function Arena() {
     if (!config) return null;
 
     if (troop.isInCombat) {
-      const team = troop.team === 'red' ? 'opponent' : 'player';
-      return `${config.gifPaths.fight[team as 'player' | 'opponent']}?v=${troop.isInCombat}`;
+      // En combat : utiliser la position relative de la cible
+      // Si la cible est au-dessus (row plus petite), utiliser "player", sinon "opponent"
+      const targetIsAbove = troop.targetPosition.row < troop.position.row;
+      const gifType = targetIsAbove ? 'player' : 'opponent';
+      return `${config.gifPaths.fight[gifType as 'player' | 'opponent']}?v=${troop.isInCombat}`;
     } else {
       // Mode marche - déterminer la direction
       const isMovingDown = troop.targetPosition.row > troop.position.row;
@@ -349,8 +352,8 @@ export default function Arena() {
                         }}
                       >
                         <TowerHealthBar
-                          currentHealth={tower?.type === 'king' ? 2400 : 1400}
-                          maxHealth={tower?.type === 'king' ? 2400 : 1400}
+                          currentHealth={tower?.type === 'king' ? 4825 : 3052}
+                          maxHealth={tower?.type === 'king' ? 4825 : 3052}
                           isKing={tower?.type === 'king'}
                           team={(tower?.team as 'red' | 'blue') || 'red'}
                         />

@@ -1,8 +1,7 @@
 export enum BabyDragonState {
   SPAWNING,
-  MOVING_TO_BRIDGE,
-  TARGETING_TOWER,
-  ATTACKING_TOWER,
+  SEEKING_TARGET,
+  ATTACKING_TARGET,
   DEAD
 }
 
@@ -11,8 +10,7 @@ export interface BabyDragonPosition {
   col: number;
 }
 
-import { TroopType, TROOP_CONFIGS, TroopState, BaseTroop } from '../types/Troop';
-import { TroopUtils } from '../utils/troop_utils';
+import { TroopType, TROOP_CONFIGS } from '../types/Troop';
 
 export interface BabyDragon {
   id: string;
@@ -81,9 +79,9 @@ export class BabyDragonEntity {
 
 
   private startTargetingTowerDirectly(): void {
-    // Aller directement vers une tour ennemie sans passer par le pont
-    this.data.state = BabyDragonState.TARGETING_TOWER;
-    // La cible sera définie dans le premier update avec les tours actives
+    // Aller directement chercher l'ennemi le plus proche
+    this.data.state = BabyDragonState.SEEKING_TARGET;
+    // La cible sera définie dans le premier update
   }
 
     public update(deltaTime: number, activeTowers: any[], flaggedCells?: Set<string>, gameEngine?: any): void {
@@ -91,56 +89,130 @@ export class BabyDragonEntity {
 
     switch (this.data.state) {
       case BabyDragonState.SPAWNING:
-        // BabyDragons vont directement cibler l'ennemi le plus proche
-        this.data.state = BabyDragonState.TARGETING_TOWER;
+        // BabyDragons vont directement chercher l'ennemi le plus proche
+        this.data.state = BabyDragonState.SEEKING_TARGET;
         break;
 
-      case BabyDragonState.MOVING_TO_BRIDGE:
-        // BabyDragons ne passent jamais par le pont (flying: true)
-        this.data.state = BabyDragonState.TARGETING_TOWER;
-        break;
-
-
-      case BabyDragonState.TARGETING_TOWER:
+      case BabyDragonState.SEEKING_TARGET:
         // Si pas encore de cible définie, en trouver une
         if (!this.data.towerTarget) {
           this.findAndTargetEnemy(activeTowers, gameEngine);
         }
         
-        // Recalculer périodiquement la cible la plus proche (focusOnBuildings: false)
-        if (gameEngine) {
+        // Mettre à jour la position de la cible actuelle (importante pour les cibles mobiles)
+        if (this.data.towerTarget && gameEngine) {
+          this.updateTargetPosition(activeTowers, gameEngine);
+        }
+        
+        // Recalculer la cible la plus proche seulement si pas en combat (focusOnBuildings: false)
+        if (!this.data.isInCombat && gameEngine) {
           const closestEnemyResult = gameEngine.findClosestEnemy(this.data);
           if (closestEnemyResult && this.data.towerTarget !== closestEnemyResult.target.id) {
-            console.log(`BabyDragon ${this.data.id} retargeting from ${this.data.towerTarget} to closer enemy ${closestEnemyResult.target.id}`);
-            const { target } = closestEnemyResult;
-            this.data.towerTarget = target.id;
-            this.data.targetPosition = { 
-              row: target.type === 'tower' ? target.row : target.position.row, 
-              col: target.type === 'tower' ? target.col : target.position.col 
-            };
+            const currentDistance = this.getDistanceToTarget();
+            // Ne changer de cible que si la nouvelle cible est significativement plus proche
+            if (closestEnemyResult.distance < currentDistance - 1.0) {
+              console.log(`BabyDragon ${this.data.id} retargeting from ${this.data.towerTarget} to closer enemy ${closestEnemyResult.target.id}`);
+              const { target } = closestEnemyResult;
+              this.data.towerTarget = target.id;
+              this.data.targetPosition = { 
+                row: target.type === 'tower' ? target.row : target.position.row, 
+                col: target.type === 'tower' ? target.col : target.position.col 
+              };
+            }
           }
         }
         
         if (this.data.towerTarget) {
-          // Vérifier la distance à la tour cible
+          // Vérifier la distance à la tour cible AVANT de bouger
           const distanceToTower = this.getDistanceToTarget();
           
-          if (distanceToTower <= (this.data.team === 'red' ? 2.9 : 2.4)) {
-            // À moins d'une case de la tour, passer en mode combat
+          if (distanceToTower <= 2.6) {
+            // À portée d'attaque, passer en mode combat
             console.log(`BabyDragon ${this.data.id} entering combat mode! Distance: ${distanceToTower.toFixed(2)}`);
             this.data.isInCombat = true;
-            this.data.state = BabyDragonState.ATTACKING_TOWER;
+            this.data.state = BabyDragonState.ATTACKING_TARGET;
           } else {
-            // Continuer à se déplacer vers la tour
-            this.moveTowards(this.data.targetPosition, deltaTime, flaggedCells);
+            // Se déplacer vers la cible en vérifiant si on arrive à portée pendant le mouvement
+            this.moveTowardsWithRangeCheck(this.data.targetPosition, deltaTime, flaggedCells, 2.6);
           }
         }
         break;
 
-      case BabyDragonState.ATTACKING_TOWER:
-        this.attackTower(deltaTime, activeTowers);
+      case BabyDragonState.ATTACKING_TARGET:
+        // Mettre à jour la position de la cible même en combat (pour les cibles mobiles)
+        if (this.data.towerTarget && gameEngine) {
+          this.updateTargetPosition(activeTowers, gameEngine);
+        }
+        this.attackTower(deltaTime, activeTowers, gameEngine);
         break;
     }
+  }
+
+  private moveTowardsWithRangeCheck(target: BabyDragonPosition, deltaTime: number, flaggedCells?: Set<string>, stopRange?: number): void {
+    const { position, speed } = this.data;
+
+    console.log(`BabyDragon ${this.data.id} moving towards target: ${target.row}, ${target.col}`);
+    
+    // Calculer la direction
+    const dx = target.col - position.col;
+    const dy = target.row - position.row;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 0.1) {
+      // Arrivé à destination
+      this.data.position = { ...target };
+      return;
+    }
+
+    // Si on a une portée d'arrêt et qu'on est déjà dans la portée, ne pas bouger
+    if (stopRange && distance <= stopRange) {
+      console.log(`BabyDragon ${this.data.id} stopping movement - in range! Distance: ${distance.toFixed(2)}`);
+      this.data.isInCombat = true;
+      this.data.state = BabyDragonState.ATTACKING_TARGET;
+      return;
+    }
+
+    // Normaliser et appliquer la vitesse
+    const moveDistance = speed * deltaTime;
+    let normalizedDx = (dx / distance) * moveDistance;
+    let normalizedDy = (dy / distance) * moveDistance;
+
+    // Si on a une portée d'arrêt, vérifier qu'on ne va pas la dépasser
+    if (stopRange && moveDistance >= distance - stopRange) {
+      // Ajuster le mouvement pour s'arrêter à la bonne distance
+      const targetDistance = Math.max(stopRange - 0.1, 0.1);
+      const adjustedMoveDistance = distance - targetDistance;
+      normalizedDx = (dx / distance) * adjustedMoveDistance;
+      normalizedDy = (dy / distance) * adjustedMoveDistance;
+      console.log(`BabyDragon ${this.data.id} adjusting movement to stay in range`);
+    }
+
+    // Calculer la nouvelle position potentielle
+    const newPosition = {
+      row: position.row + normalizedDy,
+      col: position.col + normalizedDx
+    };
+
+    // Vérifier si la nouvelle position entre en collision avec une flagged cell (seulement si pas volant)
+    if (!this.data.flying && flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
+      console.log(`BabyDragon ${this.data.id} (${this.data.team}) blocked by flagged cell at (${Math.floor(newPosition.row)}, ${Math.floor(newPosition.col)})`);
+      
+      // Analyser le contournement intelligent
+      const avoidanceDirection = this.calculateSmartAvoidance(position, target, flaggedCells, Math.sqrt(normalizedDx * normalizedDx + normalizedDy * normalizedDy));
+      
+      if (avoidanceDirection) {
+        normalizedDx = avoidanceDirection.dx;
+        normalizedDy = avoidanceDirection.dy;
+      } else {
+        // Si on ne peut pas contourner, ne pas bouger
+        console.log(`BabyDragon ${this.data.id} (${this.data.team}) cannot avoid obstacle, staying put`);
+        return;
+      }
+    }
+
+    // Mettre à jour la position
+    this.data.position.col += normalizedDx;
+    this.data.position.row += normalizedDy;
   }
 
   private moveTowards(target: BabyDragonPosition, deltaTime: number, flaggedCells?: Set<string>): void {
@@ -284,16 +356,38 @@ export class BabyDragonEntity {
     return { row: avgRow, col: avgCol };
   }
 
-  private isAtPosition(target: BabyDragonPosition): boolean {
-    const dx = this.data.position.col - target.col;
-    const dy = this.data.position.row - target.row;
-    return Math.sqrt(dx * dx + dy * dy) < 0.5; // Augmenté de 0.2 à 0.5
-  }
-
   private getDistanceToTarget(): number {
     const dx = this.data.targetPosition.col - this.data.position.col;
     const dy = this.data.targetPosition.row - this.data.position.row;
     return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  private updateTargetPosition(activeTowers: any[], gameEngine?: any): void {
+    if (!this.data.towerTarget) return;
+
+    // Chercher d'abord dans les tours
+    let target = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    
+    // Si pas trouvé dans les tours, chercher dans les troupes
+    if (!target && gameEngine) {
+      const allTroops = gameEngine.getAllTroops();
+      const troopTarget = allTroops.find((troop: any) => troop.id === this.data.towerTarget);
+      if (troopTarget && troopTarget.isAlive) {
+        target = { ...troopTarget, type: 'troop' };
+      }
+    }
+    
+    if (target) {
+      // Mettre à jour la position de la cible
+      this.data.targetPosition = { 
+        row: target.type === 'troop' ? target.position.row : target.row, 
+        col: target.type === 'troop' ? target.position.col : target.col 
+      };
+    } else {
+      // Cible disparue, la supprimer
+      console.log(`BabyDragon ${this.data.id} target ${this.data.towerTarget} disappeared, clearing target`);
+      this.data.towerTarget = undefined;
+    }
   }
 
   private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
@@ -355,7 +449,7 @@ export class BabyDragonEntity {
     // Cibler la tour la plus proche
     this.data.towerTarget = closestTower.id;
     this.data.targetPosition = { row: closestTower.row, col: closestTower.col };
-    this.data.state = BabyDragonState.TARGETING_TOWER;
+    this.data.state = BabyDragonState.SEEKING_TARGET;
   }
 
   public takeDamage(damage: number): void {
@@ -375,24 +469,46 @@ export class BabyDragonEntity {
     };
   }
 
-  private attackTower(deltaTime: number, activeTowers: any[]): void {
+  private attackTower(deltaTime: number, activeTowers: any[], gameEngine?: any): void {
     if (!this.data.towerTarget) {
-      console.log(`BabyDragon ${this.data.id} has no tower target in combat mode!`);
+      console.log(`BabyDragon ${this.data.id} has no target in combat mode!`);
       return;
     }
 
-    // Trouver la tour cible
-    const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
-    if (!targetTower) {
-      console.log(`BabyDragon ${this.data.id} target tower ${this.data.towerTarget} not found!`);
-      // Retourner en mode recherche de tour
-      this.data.state = BabyDragonState.TARGETING_TOWER;
+    // Trouver la cible (peut être une tour ou une troupe)
+    let target = activeTowers.find(tower => tower.id === this.data.towerTarget);
+    
+    // Si pas trouvé dans les tours, chercher dans les troupes
+    if (!target && gameEngine) {
+      const allTroops = gameEngine.getAllTroops();
+      const troopTarget = allTroops.find((troop: any) => troop.id === this.data.towerTarget);
+      if (troopTarget) {
+        target = { ...troopTarget, type: 'troop' };
+      }
+    }
+    
+    if (!target || (target.type === 'troop' && !target.isAlive)) {
+      console.log(`BabyDragon ${this.data.id} target ${this.data.towerTarget} not found or dead!`);
+      // Retourner en mode recherche de cible
+      this.data.state = BabyDragonState.SEEKING_TARGET;
       this.data.towerTarget = undefined;
+      this.data.isInCombat = false;
       return;
     }
 
-    // Vérifier si la tour est toujours à portée
-    const distanceToTower = this.getDistanceToTarget();
+    // La position de la cible est déjà mise à jour par updateTargetPosition()
+
+    // Vérifier si la cible est toujours à portée
+    const distanceToTarget = this.getDistanceToTarget();
+    const attackRange = 2.6;
+
+    if (distanceToTarget > attackRange) {
+      // Cible trop loin, revenir en mode poursuite
+      console.log(`BabyDragon ${this.data.id} target too far (${distanceToTarget.toFixed(2)}), switching back to seeking mode`);
+      this.data.state = BabyDragonState.SEEKING_TARGET;
+      this.data.isInCombat = false;
+      return;
+    }
 
     // Vérifier si on peut attaquer (cooldown)
     const currentTime = performance.now() / 1000; // Convertir en secondes
@@ -401,22 +517,22 @@ export class BabyDragonEntity {
 
     if (timeSinceLastAttack >= attackCooldown) {
       // Effectuer l'attaque
-      console.log(`BabyDragon ${this.data.id} attacks tower ${this.data.towerTarget} for ${this.data.attackDamage} damage! Distance: ${distanceToTower.toFixed(2)}`);
+      console.log(`BabyDragon ${this.data.id} attacks ${target.type} ${this.data.towerTarget} for ${this.data.attackDamage} damage! Distance: ${distanceToTarget.toFixed(2)}`);
       
-      // Ici, nous devrions infliger des dégâts à la tour
+      // Ici, nous devrions infliger des dégâts à la cible
       // Pour l'instant, on simule juste l'attaque
-      this.performAttack(targetTower);
+      this.performAttack(target);
       
       this.data.lastAttackTime = currentTime;
     }
   }
 
-  private performAttack(targetTower: any): void {
+  private performAttack(target: any): void {
     // Cette méthode sera appelée pour effectuer l'attaque réelle
     // Pour l'instant, on log juste l'attaque
-    console.log(`Attack performed: BabyDragon ${this.data.id} -> Tower ${targetTower.id}`);
+    console.log(`Attack performed: BabyDragon ${this.data.id} -> ${target.type} ${target.id}`);
     
-    // TODO: Implémenter la logique de dégâts sur la tour
-    // targetTower.takeDamage(this.data.attackDamage);
+    // TODO: Implémenter la logique de dégâts sur la cible
+    // target.takeDamage(this.data.attackDamage);
   }
 }

@@ -11,8 +11,7 @@ export interface GiantPosition {
   col: number;
 }
 
-import { TroopType, TROOP_CONFIGS, TroopState, BaseTroop } from '../types/Troop';
-import { TroopUtils } from '../utils/troop_utils';
+import { TroopType, TROOP_CONFIGS } from '../types/Troop';
 
 export interface Giant {
   id: string;
@@ -107,35 +106,22 @@ export class GiantEntity {
   }
 
   private chooseBridge(): void {
-    const closestBridge = TroopUtils.chooseBridge(this.getBaseTroopData());
-    this.data.bridgeTarget = { ...closestBridge };
+    const { position } = this.data;
+    
+    // Calculer la distance vers chaque pont
+    const distances = BRIDGES.map(bridge => {
+      const dx = bridge.col - position.col;
+      const dy = bridge.row - position.row;
+      return Math.sqrt(dx * dx + dy * dy);
+    });
+
+    // Choisir le pont le plus proche
+    const closestBridgeIndex = distances.indexOf(Math.min(...distances));
+    this.data.bridgeTarget = { ...BRIDGES[closestBridgeIndex] };
     this.data.targetPosition = { ...this.data.bridgeTarget };
     this.data.state = GiantState.MOVING_TO_BRIDGE;
   }
 
-  private getBaseTroopData(): BaseTroop {
-    return {
-      ...this.data,
-      state: this.mapGiantStateToTroopState(this.data.state)
-    } as BaseTroop;
-  }
-
-  private mapGiantStateToTroopState(giantState: GiantState): TroopState {
-    switch (giantState) {
-      case GiantState.SPAWNING:
-        return TroopState.SPAWNING;
-      case GiantState.MOVING_TO_BRIDGE:
-        return TroopState.MOVING_TO_BRIDGE;
-      case GiantState.TARGETING_TOWER:
-        return TroopState.TARGETING_TOWER;
-      case GiantState.ATTACKING_TOWER:
-        return TroopState.ATTACKING_TOWER;
-      case GiantState.DEAD:
-        return TroopState.DEAD;
-      default:
-        return TroopState.SPAWNING;
-    }
-  }
 
   private startTargetingTowerDirectly(): void {
     // Aller directement vers une tour ennemie sans passer par le pont
@@ -165,25 +151,90 @@ export class GiantEntity {
         }
         
         if (this.data.towerTarget) {
-          // Vérifier la distance à la tour cible
+          // Vérifier la distance à la tour cible AVANT de bouger
           const distanceToTower = this.getDistanceToTarget();
 
-          if (distanceToTower <= (this.data.team === 'red' ? 2.9 : 2.4)) {
-            // À moins d'une case de la tour, passer en mode combat
+          if (distanceToTower <= 2.6) {
+            // À portée d'attaque, passer en mode combat
             console.log(`Giant ${this.data.id} entering combat mode! Distance: ${distanceToTower.toFixed(2)}`);
             this.data.isInCombat = true;
             this.data.state = GiantState.ATTACKING_TOWER;
           } else {
-            // Continuer à se déplacer vers la tour
-            this.moveTowards(this.data.targetPosition, deltaTime, flaggedCells);
+            // Se déplacer vers la tour en vérifiant si on arrive à portée pendant le mouvement
+            this.moveTowardsWithRangeCheck(this.data.targetPosition, deltaTime, flaggedCells, 2.6);
           }
         }
         break;
 
       case GiantState.ATTACKING_TOWER:
-        this.attackTower(deltaTime, activeTowers);
+        this.attackTower(deltaTime, activeTowers, gameEngine);
         break;
     }
+  }
+
+  private moveTowardsWithRangeCheck(target: GiantPosition, deltaTime: number, flaggedCells?: Set<string>, stopRange?: number): void {
+    const { position, speed } = this.data;
+    
+    // Calculer la direction
+    const dx = target.col - position.col;
+    const dy = target.row - position.row;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 0.1) {
+      // Arrivé à destination
+      this.data.position = { ...target };
+      return;
+    }
+
+    // Si on a une portée d'arrêt et qu'on est déjà dans la portée, ne pas bouger
+    if (stopRange && distance <= stopRange) {
+      console.log(`Giant ${this.data.id} stopping movement - in range! Distance: ${distance.toFixed(2)}`);
+      this.data.isInCombat = true;
+      this.data.state = GiantState.ATTACKING_TOWER;
+      return;
+    }
+
+    // Normaliser et appliquer la vitesse
+    const moveDistance = speed * deltaTime;
+    let normalizedDx = (dx / distance) * moveDistance;
+    let normalizedDy = (dy / distance) * moveDistance;
+
+    // Si on a une portée d'arrêt, vérifier qu'on ne va pas la dépasser
+    if (stopRange && moveDistance >= distance - stopRange) {
+      // Ajuster le mouvement pour s'arrêter à la bonne distance
+      const targetDistance = Math.max(stopRange - 0.1, 0.1);
+      const adjustedMoveDistance = distance - targetDistance;
+      normalizedDx = (dx / distance) * adjustedMoveDistance;
+      normalizedDy = (dy / distance) * adjustedMoveDistance;
+      console.log(`Giant ${this.data.id} adjusting movement to stay in range`);
+    }
+
+    // Calculer la nouvelle position potentielle
+    const newPosition = {
+      row: position.row + normalizedDy,
+      col: position.col + normalizedDx
+    };
+
+    // Vérifier si la nouvelle position entre en collision avec une flagged cell (seulement si pas volant)
+    if (!this.data.flying && flaggedCells && this.wouldCollideWithFlaggedCell(newPosition, flaggedCells)) {
+      console.log(`Giant ${this.data.id} (${this.data.team}) blocked by flagged cell at (${Math.floor(newPosition.row)}, ${Math.floor(newPosition.col)})`);
+      
+      // Analyser le contournement intelligent
+      const avoidanceDirection = this.calculateSmartAvoidance(position, target, flaggedCells, Math.sqrt(normalizedDx * normalizedDx + normalizedDy * normalizedDy));
+      
+      if (avoidanceDirection) {
+        normalizedDx = avoidanceDirection.dx;
+        normalizedDy = avoidanceDirection.dy;
+      } else {
+        // Si on ne peut pas contourner, ne pas bouger
+        console.log(`Giant ${this.data.id} (${this.data.team}) cannot avoid obstacle, staying put`);
+        return;
+      }
+    }
+
+    // Mettre à jour la position
+    this.data.position.col += normalizedDx;
+    this.data.position.row += normalizedDy;
   }
 
   private moveTowards(target: GiantPosition, deltaTime: number, flaggedCells?: Set<string>): void {
@@ -334,7 +385,9 @@ export class GiantEntity {
   }
 
   private getDistanceToTarget(): number {
-    return TroopUtils.getDistanceToTarget(this.getBaseTroopData());
+    const dx = this.data.targetPosition.col - this.data.position.col;
+    const dy = this.data.targetPosition.row - this.data.position.row;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
 
@@ -343,34 +396,28 @@ export class GiantEntity {
   }
 
 
-  private mapTroopStateToGiantState(troopState: TroopState): GiantState {
-    switch (troopState) {
-      case TroopState.SPAWNING:
-        return GiantState.SPAWNING;
-      case TroopState.MOVING_TO_BRIDGE:
-        return GiantState.MOVING_TO_BRIDGE;
-      case TroopState.TARGETING_TOWER:
-        return GiantState.TARGETING_TOWER;
-      case TroopState.ATTACKING_TOWER:
-        return GiantState.ATTACKING_TOWER;
-      case TroopState.DEAD:
-        return GiantState.DEAD;
-      default:
-        return GiantState.SPAWNING;
-    }
-  }
 
 
   private handleMovingToBridge(deltaTime: number, flaggedCells?: Set<string>, gameEngine?: any): void {
-    const newState = TroopUtils.handleMovingToBridge(
-      this.getBaseTroopData(),
-      deltaTime,
-      flaggedCells,
-      gameEngine,
-      (target, deltaTime, flaggedCells) => this.moveTowards(target, deltaTime, flaggedCells),
-      (target) => this.isAtPosition(target)
-    );
-    this.data.state = this.mapTroopStateToGiantState(newState);
+    // Vérifier si le Giant a déjà passé la frontière (pont)
+    const frontierRow = 16;
+    const hasCrossedFrontier = this.data.team === 'blue' ? 
+      this.data.position.row < frontierRow : // Bleu va vers le haut
+      this.data.position.row > frontierRow;  // Rouge va vers le bas
+    
+    if (hasCrossedFrontier) {
+      console.log(`Giant ${this.data.id} (${this.data.team}) has crossed frontier`);
+      this.data.state = GiantState.TARGETING_TOWER;
+      return;
+    }
+    
+    this.moveTowards(this.data.targetPosition, deltaTime, flaggedCells);
+    
+    // Vérifier si le pont est atteint
+    if (this.isAtPosition(this.data.targetPosition)) {
+      console.log(`Giant ${this.data.id} (${this.data.team}) reached bridge, switching to tower targeting`);
+      this.data.state = GiantState.TARGETING_TOWER;
+    }
   }
 
   private findAndTargetEnemy(activeTowers: any[], gameEngine?: any): void {
@@ -438,7 +485,7 @@ export class GiantEntity {
     };
   }
 
-  private attackTower(deltaTime: number, activeTowers: any[]): void {
+  private attackTower(deltaTime: number, activeTowers: any[], gameEngine?: any): void {
     if (!this.data.towerTarget) {
       console.log(`Giant ${this.data.id} has no tower target in combat mode!`);
       return;
@@ -456,6 +503,15 @@ export class GiantEntity {
 
     // Vérifier si la tour est toujours à portée
     const distanceToTower = this.getDistanceToTarget();
+    const attackRange = 2.6;
+
+    if (distanceToTower > attackRange) {
+      // Cible trop loin, revenir en mode poursuite
+      console.log(`Giant ${this.data.id} target too far (${distanceToTower.toFixed(2)}), switching back to targeting mode`);
+      this.data.state = GiantState.TARGETING_TOWER;
+      this.data.isInCombat = false;
+      return;
+    }
 
     // Vérifier si on peut attaquer (cooldown)
     const currentTime = performance.now() / 1000; // Convertir en secondes
