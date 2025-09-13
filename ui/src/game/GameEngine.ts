@@ -233,7 +233,7 @@ export class GameEngine {
     this.gameState.gameTime += deltaTime;
     
     // Utiliser setTimeout pour l'environnement serveur, requestAnimationFrame pour le client
-    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+    if (typeof window !== 'undefined') {
       this.animationFrameId = requestAnimationFrame(this.gameLoop);
     } else {
       // Environnement serveur - utiliser setTimeout
