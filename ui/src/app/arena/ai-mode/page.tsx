@@ -213,6 +213,88 @@ export default function AIArena() {
     };
   }, []);
 
+  // Polling system to sync with server and receive AI commands
+  useEffect(() => {
+    if (!gameId || !isGameRunning) return;
+
+    const syncWithServer = async () => {
+      try {
+        // Send current game state to server and receive AI commands
+        const response = await fetch('/api/game/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            game_id: gameId,
+            troops: troops.map(t => ({
+              id: t.id,
+              type: t.type,
+              team: t.team,
+              position: t.position,
+              health: t.health,
+              max_health: t.maxHealth || 100,
+            })),
+            towers: gameEngineTowers.map(tower => ({
+              id: tower.id,
+              team: tower.team,
+              type: tower.type,
+              health: tower.health,
+              max_health: tower.maxHealth,
+              position: { row: tower.row, col: tower.col }
+            })),
+            is_game_over: gameEnded,
+            winner: winner,
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to sync with server');
+          return;
+        }
+
+        const data = await response.json();
+
+        // Execute AI spawn commands
+        if (data.ai_actions && Array.isArray(data.ai_actions)) {
+          for (const action of data.ai_actions) {
+            if (action.type === 'spawn_troop') {
+              console.log('🤖 AI spawning troop:', action);
+              // Convert AI troop type to local format
+              const troopTypeMap: Record<string, TroopType> = {
+                'GIANT': TroopType.GIANT,
+                'BABY_DRAGON': TroopType.BABY_DRAGON,
+                'MINI_PEKKA': TroopType.MINI_PEKKA,
+                'VALKYRIE': TroopType.VALKYRIE
+              };
+              const troopType = troopTypeMap[action.troop_type];
+              if (troopType) {
+                spawnTroop(troopType, 'red', action.position.row, action.position.col);
+              }
+            }
+          }
+        }
+
+        // Update tactical analysis if provided
+        if (data.tactical_analysis) {
+          setTacticalAnalysis(data.tactical_analysis);
+        }
+      } catch (error) {
+        console.error('Error syncing with server:', error);
+      }
+    };
+
+    // Start polling
+    const interval = setInterval(syncWithServer, 1000); // Sync every second
+    setAiPollingInterval(interval);
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [gameId, isGameRunning, troops, gameEngineTowers, gameEnded, winner, spawnTroop]);
+
   // Function to get troop GIF path (same as arena)
   const getTroopGifPath = (troop: any) => {
     const config = TROOP_CONFIGS[troop.type as TroopType];
@@ -241,9 +323,9 @@ export default function AIArena() {
     setDraggedCard(null);
   };
 
-  const handleCellDrop = async (row: number, col: number, e: React.DragEvent) => {
+  const handleCellDrop = (row: number, col: number, e: React.DragEvent) => {
     e.preventDefault();
-    if (!draggedCard || !gameEngine || !isGameRunning) return;
+    if (!draggedCard || !isGameRunning) return;
 
     // Only allow blue team to spawn in their half
     if (row < 17) {
@@ -251,7 +333,7 @@ export default function AIArena() {
       return;
     }
 
-    await gameEngine.spawnTroopOnServer(draggedCard.troopType, 'blue', row, col);
+    spawnTroop(draggedCard.troopType, 'blue', row, col);
     setDraggedCard(null);
   };
 
@@ -259,44 +341,14 @@ export default function AIArena() {
     e.preventDefault();
   };
 
-  const handleCardClick = async (troopType: TroopType) => {
-    if (!gameEngine || !isGameRunning) return;
+  const handleCardClick = (troopType: TroopType) => {
+    if (!isGameRunning) return;
 
     // Default spawn position for blue team
     const row = 25;
     const col = 8;
 
-    await gameEngine.spawnTroopOnServer(troopType, 'blue', row, col);
-  };
-
-  const startGame = () => {
-    if (gameEngine) {
-      gameEngine.start();
-      setIsGameRunning(true);
-      setIsGamePaused(false);
-    }
-  };
-
-  const pauseGame = () => {
-    if (gameEngine) {
-      gameEngine.pause();
-      setIsGamePaused(true);
-    }
-  };
-
-  const resumeGame = () => {
-    if (gameEngine) {
-      gameEngine.resume();
-      setIsGamePaused(false);
-    }
-  };
-
-  const stopGame = () => {
-    if (gameEngine) {
-      gameEngine.stop();
-      setIsGameRunning(false);
-      setIsGamePaused(false);
-    }
+    spawnTroop(troopType, 'blue', row, col);
   };
 
   const handleRestart = () => {

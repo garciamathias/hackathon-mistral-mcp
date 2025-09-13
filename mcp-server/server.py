@@ -378,6 +378,81 @@ async def stream_game_state(game_id: str):
         }
     )
 
+# Sync endpoint for AI mode
+@app.post("/sync")
+async def handle_sync_request(request: dict):
+    """Handle sync request from Next.js - receive game state and return AI actions"""
+    game_id = request.get("game_id")
+    troops = request.get("troops", [])
+    towers_list = request.get("towers", [])  # Client sends an array
+    is_game_over = request.get("is_game_over", False)
+    winner = request.get("winner")
+
+    # Convert towers array to dictionary for internal use
+    towers_dict = {}
+    if isinstance(towers_list, list):
+        for tower in towers_list:
+            tower_id = tower.get("id")
+            if tower_id:
+                towers_dict[tower_id] = tower
+    elif isinstance(towers_list, dict):
+        towers_dict = towers_list
+
+    # Update the stored game state with the client's state
+    if game_id in game_states:
+        game_states[game_id]["troops"] = troops
+        game_states[game_id]["towers"] = towers_dict
+        game_states[game_id]["is_game_over"] = is_game_over
+        game_states[game_id]["winner"] = winner
+    else:
+        # Initialize if not exists
+        game_states[game_id] = initialize_game_state(game_id)
+        game_states[game_id]["troops"] = troops
+        game_states[game_id]["towers"] = towers_dict
+
+    # Generate AI actions based on game state
+    ai_actions = []
+
+    if not is_game_over:
+        # Simple AI logic - spawn troops periodically
+        import random
+
+        # Check if AI (red team) should spawn a troop
+        red_troops = [t for t in troops if t.get("team") == "red"]
+        blue_troops = [t for t in troops if t.get("team") == "blue"]
+
+        # AI spawns a troop every few syncs with some randomness
+        if random.random() < 0.1:  # 10% chance per sync
+            # Choose a random troop type
+            troop_types = ["GIANT", "BABY_DRAGON", "MINI_PEKKA", "VALKYRIE"]
+            chosen_troop = random.choice(troop_types)
+
+            # Choose spawn position (red team spawns in top half)
+            spawn_positions = [
+                {"row": 5, "col": 8},   # Center top
+                {"row": 8, "col": 3},   # Left lane
+                {"row": 8, "col": 14},  # Right lane
+            ]
+            chosen_position = random.choice(spawn_positions)
+
+            ai_actions.append({
+                "type": "spawn_troop",
+                "troop_type": chosen_troop,
+                "position": chosen_position,
+                "team": "red"
+            })
+
+            print(f"🤖 AI deciding to spawn {chosen_troop} at {chosen_position}")
+
+    # Generate tactical analysis
+    tactical_analysis = analyze_tactical_situation(game_states[game_id]) if game_id in game_states else "Initializing game analysis..."
+
+    return {
+        "ai_actions": ai_actions,
+        "tactical_analysis": tactical_analysis,
+        "game_id": game_id
+    }
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
