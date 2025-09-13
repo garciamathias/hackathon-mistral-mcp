@@ -5,7 +5,6 @@ import { Giant } from './Giant';
 export interface GameHookReturn {
   giants: Giant[];
   gameStats: any;
-  spawnGiant: (team: 'red' | 'blue') => void;
   spawnGiantAt: (team: 'red' | 'blue', row: number, col: number) => void;
   startGame: () => void;
   pauseGame: () => void;
@@ -88,7 +87,6 @@ export const useGameEngine = (towers?: any[], flaggedCells?: Set<string>): GameH
   return {
     giants,
     gameStats,
-    spawnGiant,
     spawnGiantAt,
     startGame,
     pauseGame,

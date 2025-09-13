@@ -150,7 +150,7 @@ export class GameEngine {
 
   public connectTowers(towers: any[]): void {
     // Méthode pour connecter les données des tours depuis Arena
-    this.getActiveTowers = () => towers;
+    this.getActiveTowers = () => towers.filter(tower => tower.active);
   }
 
   public connectFlaggedCells(flaggedCells: Set<string>): void {

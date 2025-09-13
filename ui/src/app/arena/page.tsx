@@ -203,7 +203,6 @@ export default function Arena() {
   const { 
     giants, 
     gameStats, 
-    spawnGiant,
     spawnGiantAt,
     startGame, 
     pauseGame, 
@@ -314,8 +313,29 @@ export default function Arena() {
                       Math.floor(giant.position.col) === col
                     )
                     .map(giant => {
-                      const team = giant.team === 'red' ? 'player' : 'opponent';
-                      const gifPath = `/images/troops/giant/Giant_walk_${team}_109-109.gif`;
+                      // Choisir le GIF selon l'état du Giant
+                      let gifPath;
+                      if (giant.isInCombat) {
+                        // Mode combat
+                        const team = giant.team === 'red' ? 'opponent' : 'player';
+                        gifPath = `/images/troops/giant/Giant_fight_${team}_109-109.gif?v=${giant.isInCombat}`;
+                      } else {
+                        // Mode marche - déterminer la direction
+                        const isMovingDown = giant.targetPosition.row > giant.position.row;
+                        const isMovingUp = giant.targetPosition.row < giant.position.row;
+                        
+                        let gifType;
+                        if (isMovingDown) {
+                          gifType = 'player'; // Vers le bas = player
+                        } else if (isMovingUp) {
+                          gifType = 'opponent'; // Vers le haut = opponent
+                        } else {
+                          // Mouvement horizontal ou statique, utiliser selon l'équipe
+                          gifType = giant.team === 'red' ? 'opponent' : 'player';
+                        }
+                        
+                        gifPath = `/images/troops/giant/Giant_walk_${gifType}_109-109.gif?v=${Math.floor(giant.position.row)}-${Math.floor(giant.position.col)}`;
+                      }
                       
                       return (
                         <div
@@ -327,9 +347,13 @@ export default function Arena() {
                         >
                           {/* GIF du Giant */}
                           <img
+                            key={`${giant.id}-${giant.isInCombat ? 'combat' : 'walk'}`}
                             src={gifPath}
                             alt={`Giant ${giant.team}`}
                             className="w-12 h-12 object-contain"
+                            style={{
+                              transform: 'scale(3)'
+                            }}
                           />
                           
                           {/* Barre de vie */}
