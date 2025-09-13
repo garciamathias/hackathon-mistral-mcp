@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function Arena() {
   const numRows = 34;
   const numCols = 18;
+
+  const [visbleGrid, setVisbleGrid] = useState<boolean>(true);
 
   // Positions des tours
   const towers = [
@@ -13,27 +16,20 @@ export default function Arena() {
     { row: 2, col: 8, type: 'king_red', size: 6, offsetX: 1, offsetY: -2 },
     
     // Red princess 1 (1x1 cell)
-    { row: 6, col: 3, type: 'princess_red', size: 4, offsetX: 0, offsetY: 0 },
+    { row: 6, col: 3, type: 'princess_red', size: 4, offsetX: -0.7, offsetY: -2.3 },
 
     // Red princess 2 (1x1 cell)
-    { row: 6, col: 14, type: 'princess_red', size: 4, offsetX: 0, offsetY: 0 },
+    { row: 6, col: 14, type: 'princess_red', size: 4, offsetX: 0, offsetY: -2.3 },
     
     // Blue princess 1 (1x1 cell)
-    { row: 27, col: 3, type: 'princess_blue', size: 6, offsetX: 0, offsetY: 0 },
+    { row: 27, col: 3, type: 'princess_blue', size: 7.4, offsetX: -0.4, offsetY: -2 },
     
     // Blue princess 2 (1x1 cell)
-    { row: 27, col: 14, type: 'princess_blue', size: 6, offsetX: 0, offsetY: 0 },
+    { row: 27, col: 14, type: 'princess_blue', size: 7.4, offsetX: 0, offsetY: -2 },
     
     // King blue (2x2 cells)
-    { row: 30, col: 8, type: 'king_blue', size: 6, offsetX: 1, offsetY: -2 },
+    { row: 30, col: 8, type: 'king_blue', size: 6.5, offsetX: 1, offsetY: -2 },
   ];
-
-  const getTowerAtPosition = (row: number, col: number) => {
-    return towers.find(tower => {
-      return row >= tower.row && row < tower.row + tower.size && 
-               col >= tower.col && col < tower.col + tower.size;
-    });
-  };
 
   const getTowerImage = (type: string) => {
     switch(type) {
@@ -72,7 +68,9 @@ export default function Arena() {
               const row = Math.floor(index / numCols);
               const col = index % numCols;
               const isEven = (row + col) % 2 === 0;
-              const tower = getTowerAtPosition(row, col);
+              const tower = towers.find(tower => {
+                return row === tower.row && col === tower.col;
+              });
               
               // Afficher l'image seulement sur la case principale (coin supérieur gauche)
               const shouldShowTower = tower && (
@@ -85,9 +83,11 @@ export default function Arena() {
                 <div
                   key={index}
                   className={`w-full h-full cursor-pointer transition-all duration-200 relative ${
-                    isEven 
-                      ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50' 
-                      : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                    visbleGrid 
+                      ? (isEven 
+                          ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
+                          : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50')
+                      : 'hover:ring-2 ring-yellow-400 ring-opacity-50'
                   }`}
                   onClick={() => {
                     console.log(`Cell ${row}, ${col}`);
@@ -119,6 +119,13 @@ export default function Arena() {
               ← Retour au Menu
             </Button>
           </Link>
+          <Button 
+            variant="secondary" 
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+            onClick={() => setVisbleGrid(!visbleGrid)}
+        >
+            Visible Grid
+        </Button>
         </div>
       </div>
     </div>
