@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSessionHeaders } from '@/lib/session';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://mcp-hackthon-production.up.railway.app';
 
 export async function GET() {
   try {
