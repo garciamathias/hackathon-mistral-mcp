@@ -16,10 +16,10 @@ export default function Lobby() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load player name
+  // Initialize with a default player name
   useEffect(() => {
-    const savedName = apiClient.getPlayerName();
-    setPlayerName(savedName);
+    // Generate a random player name for this session
+    setPlayerName(`Player_${Math.floor(Math.random() * 10000)}`);
   }, []);
 
   // Fetch available matches
@@ -43,16 +43,20 @@ export default function Lobby() {
     setError(null);
 
     try {
-      // Update player name if changed
-      if (playerName !== apiClient.getPlayerName()) {
-        apiClient.setPlayerName(playerName);
-      }
+      // Player name is now managed server-side via cookies
+      // No need to update it here
 
       const response = await apiClient.createMatch();
       if (response) {
-        // Store match ID and navigate to arena
+        // Store match ID and player info, then navigate to arena
         sessionStorage.setItem('matchId', response.matchId);
         sessionStorage.setItem('isHost', 'true');
+        // Store the player ID from the response if available
+        if (response.playerState) {
+          sessionStorage.setItem('playerId', response.playerState.id);
+          sessionStorage.setItem('playerName', response.playerState.name);
+          sessionStorage.setItem('playerTeam', response.playerState.team);
+        }
         router.push('/arena?mode=online');
       } else {
         setError('Failed to create match');
@@ -76,17 +80,20 @@ export default function Lobby() {
     setError(null);
 
     try {
-      // Update player name if changed
-      if (playerName !== apiClient.getPlayerName()) {
-        apiClient.setPlayerName(playerName);
-      }
+      // Player name is now managed server-side via cookies
+      // No need to update it here
 
       const response = await apiClient.joinMatch(targetMatchId);
       if (response) {
-        // Store match ID and navigate to arena
+        // Store match ID and player info, then navigate to arena
         sessionStorage.setItem('matchId', targetMatchId);
         sessionStorage.setItem('isHost', 'false');
         sessionStorage.setItem('playerTeam', response.team);
+        // Store the player ID from the response
+        if (response.playerState) {
+          sessionStorage.setItem('playerId', response.playerState.id);
+          sessionStorage.setItem('playerName', response.playerState.name);
+        }
         router.push('/arena?mode=online');
       } else {
         setError('Failed to join match');

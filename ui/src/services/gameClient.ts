@@ -46,6 +46,13 @@ export class GameClient {
       this.currentMatchId = response.matchId;
       this.isHost = true;
 
+      // Store player info if available
+      if (response.playerState) {
+        this.playerState = response.playerState;
+        sessionStorage.setItem('playerId', response.playerState.id);
+        sessionStorage.setItem('playerName', response.playerState.name);
+      }
+
       // Connect to WebSocket
       const wsUrl = this.buildWebSocketUrl(response.wsUrl);
       this.wsClient.connect(wsUrl);
@@ -69,6 +76,12 @@ export class GameClient {
       this.playerState = response.playerState;
       this.isHost = false;
 
+      // Store player ID in sessionStorage for later use
+      if (response.playerState) {
+        sessionStorage.setItem('playerId', response.playerState.id);
+        sessionStorage.setItem('playerName', response.playerState.name);
+      }
+
       // Connect to WebSocket
       const wsUrl = this.buildWebSocketUrl(response.wsUrl);
       this.wsClient.connect(wsUrl);
@@ -82,14 +95,9 @@ export class GameClient {
   }
 
   private buildWebSocketUrl(baseUrl: string): string {
-    // Ensure the URL has the correct protocol and parameters
-    const url = new URL(baseUrl.replace('http://', 'ws://').replace('https://', 'wss://'));
-
-    // Add or update query parameters
-    url.searchParams.set('roomId', this.currentMatchId!);
-    url.searchParams.set('playerId', apiClient.getPlayerId());
-
-    return url.toString();
+    // The WebSocket URL is now provided complete by the server
+    // It already includes the correct player ID and room ID
+    return baseUrl.replace('http://', 'ws://').replace('https://', 'wss://');
   }
 
   // Game Actions
@@ -152,10 +160,13 @@ export class GameClient {
   private handleSnapshot(snapshot: GameSnapshot): void {
     this.currentSnapshot = snapshot;
 
-    // Update player state
-    const player = snapshot.players.find(p => p.id === apiClient.getPlayerId());
-    if (player) {
-      this.playerState = player;
+    // Update player state - get player ID from sessionStorage
+    const playerId = sessionStorage.getItem('playerId');
+    if (playerId) {
+      const player = snapshot.players.find(p => p.id === playerId);
+      if (player) {
+        this.playerState = player;
+      }
     }
 
     // Check for game end

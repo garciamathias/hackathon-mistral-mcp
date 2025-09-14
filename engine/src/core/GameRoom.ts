@@ -73,14 +73,24 @@ export class GameRoom {
   }
 
   public addPlayer(playerId: string, name: string): PlayerState | null {
-    // Check if player already exists
+    // Check if player already exists - return existing player state
     if (this.players.has(playerId)) {
-      console.log(`Player ${playerId} already in room ${this.id}`);
-      return this.players.get(playerId) || null;
+      console.log(`[GameRoom] Player ${playerId} (${name}) already in room ${this.id}, returning existing state`);
+      const existingPlayer = this.players.get(playerId);
+      if (existingPlayer) {
+        // Update name if different
+        if (existingPlayer.name !== name) {
+          existingPlayer.name = name;
+          console.log(`[GameRoom] Updated player name from ${existingPlayer.name} to ${name}`);
+        }
+        return existingPlayer;
+      }
     }
 
+    // Check if room is full
     if (this.players.size >= this.maxPlayers) {
-      console.log(`Room ${this.id} is full (${this.players.size}/${this.maxPlayers})`);
+      console.log(`[GameRoom] Room ${this.id} is FULL (${this.players.size}/${this.maxPlayers}). Cannot add player ${playerId} (${name})`);
+      console.log(`[GameRoom] Current players:`, Array.from(this.players.keys()));
       return null;
     }
 
@@ -89,7 +99,8 @@ export class GameRoom {
     const blueCount = Array.from(this.players.values()).filter(p => p.team === 'blue').length;
     const team = redCount <= blueCount ? 'red' : 'blue';
 
-    console.log(`Adding player ${playerId} (${name}) to room ${this.id} on team ${team}`);
+    console.log(`[GameRoom] Adding NEW player ${playerId} (${name}) to room ${this.id} on team ${team}`);
+    console.log(`[GameRoom] Room status before add: ${this.players.size}/${this.maxPlayers} players`);
 
     // Add to engine
     this.engine.addPlayer(playerId, name, team);
@@ -98,7 +109,11 @@ export class GameRoom {
     const playerState = this.engine.getPlayers().find(p => p.id === playerId);
     if (playerState) {
       this.players.set(playerId, playerState);
-      console.log(`Room ${this.id} now has ${this.players.size}/${this.maxPlayers} players`);
+      console.log(`[GameRoom] Successfully added player ${playerId} to room ${this.id}`);
+      console.log(`[GameRoom] Room ${this.id} now has ${this.players.size}/${this.maxPlayers} players`);
+      console.log(`[GameRoom] Players in room:`, Array.from(this.players.values()).map(p => ({ id: p.id, name: p.name, team: p.team })));
+    } else {
+      console.error(`[GameRoom] Failed to get player state from engine for ${playerId}`);
     }
 
     // Start game if room is full

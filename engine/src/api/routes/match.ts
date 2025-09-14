@@ -37,12 +37,14 @@ export function createMatchRoutes(wsManager: WSManager): Router {
 
       const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${room.id}&playerId=${req.playerId}`;
 
-      const response: ApiResponse<CreateMatchResponse> = {
+      // Include playerState in the response
+      const response: ApiResponse<CreateMatchResponse & { playerState: typeof playerState }> = {
         success: true,
         data: {
           matchId: room.id,
           joinToken: room.id, // In production, generate a secure token
-          wsUrl
+          wsUrl,
+          playerState // Include the player state for consistency
         },
         timestamp: Date.now()
       };
@@ -70,9 +72,12 @@ export function createMatchRoutes(wsManager: WSManager): Router {
     (req: AuthRequest, res: Response) => {
       try {
         const { matchId } = req.body;
+        console.log(`[API /join] Player ${req.playerId} (${req.playerName}) attempting to join match ${matchId}`);
+
         const room = wsManager.getRoom(matchId);
 
         if (!room) {
+          console.log(`[API /join] Match ${matchId} not found`);
           const response: ApiResponse = {
             success: false,
             error: {
@@ -84,7 +89,36 @@ export function createMatchRoutes(wsManager: WSManager): Router {
           return res.status(404).json(response);
         }
 
+        // Log room info before attempting to join
+        const roomInfo = room.getRoomInfo();
+        console.log(`[API /join] Room ${matchId} status:`, {
+          playerCount: roomInfo.playerCount,
+          maxPlayers: roomInfo.maxPlayers,
+          status: roomInfo.status,
+          players: roomInfo.players
+        });
+
+        // Check if player is already in the room
+        const existingPlayer = roomInfo.players.find(p => p.id === req.playerId);
+        if (existingPlayer) {
+          console.log(`[API /join] Player ${req.playerId} already in room, returning existing state`);
+          const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
+
+          const response: ApiResponse<JoinMatchResponse> = {
+            success: true,
+            data: {
+              matchId,
+              team: existingPlayer.team,
+              wsUrl,
+              playerState: existingPlayer as any
+            },
+            timestamp: Date.now()
+          };
+          return res.json(response);
+        }
+
         if (room.isFull()) {
+          console.log(`[API /join] Room ${matchId} is full (${roomInfo.playerCount}/${roomInfo.maxPlayers})`);
           const response: ApiResponse = {
             success: false,
             error: {
@@ -96,19 +130,23 @@ export function createMatchRoutes(wsManager: WSManager): Router {
           return res.status(400).json(response);
         }
 
+        console.log(`[API /join] Attempting to add player ${req.playerId} to room ${matchId}`);
         const playerState = room.addPlayer(req.playerId!, req.playerName!);
 
         if (!playerState) {
+          console.error(`[API /join] Failed to add player ${req.playerId} to room ${matchId}`);
           const response: ApiResponse = {
             success: false,
             error: {
               code: ERROR_CODES.ROOM_FULL,
-              message: 'Failed to join match'
+              message: 'Failed to join match - room may be full'
             },
             timestamp: Date.now()
           };
           return res.status(500).json(response);
         }
+
+        console.log(`[API /join] Successfully added player ${req.playerId} to room ${matchId} on team ${playerState.team}`);
 
         const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
 

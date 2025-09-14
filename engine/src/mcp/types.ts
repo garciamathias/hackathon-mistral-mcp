@@ -62,6 +62,8 @@ export interface CreateGameResponse {
   team: 'red' | 'blue';
   wsUrl: string;
   message: string;
+  sessionId?: string; // Session ID to use for subsequent calls
+  playerId?: string;  // Player ID for reference
 }
 
 export interface JoinGameResponse {
@@ -71,6 +73,8 @@ export interface JoinGameResponse {
   wsUrl: string;
   playerCount: number;
   message: string;
+  sessionId?: string; // Session ID to use for subsequent calls
+  playerId?: string;  // Player ID for reference
 }
 
 export interface GameStatusResponse {

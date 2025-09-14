@@ -100,6 +100,7 @@ export interface CreateMatchResponse {
   matchId: string;
   joinToken: string;
   wsUrl: string;
+  playerState?: PlayerState; // Optional to maintain backward compatibility
 }
 
 export interface JoinMatchResponse {
