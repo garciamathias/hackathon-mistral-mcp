@@ -260,16 +260,30 @@ function ArenaContent() {
     [TroopType.VALKYRIE]: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
   };
 
+  const FALLBACK_FIGHT: Record<TroopType, {player: string; opponent: string}> = {
+    [TroopType.GIANT]: { player: "/images/troops/giant/Giant_fight_player.gif", opponent: "/images/troops/giant/Giant_fight_opponent.gif" },
+    [TroopType.BABY_DRAGON]: { player: "/images/troops/babydragon/BabyDragon_fight_player.gif", opponent: "/images/troops/babydragon/BabyDragon_fight_opponent.gif" },
+    [TroopType.MINI_PEKKA]: { player: "/images/troops/minipekka/MiniPekka_fight_player.gif", opponent: "/images/troops/minipekka/MiniPekka_fight_opponent.gif" },
+    [TroopType.VALKYRIE]: { player: "/images/troops/valkyrie/Valkyrie_fight_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_fight_opponent.gif" },
+  };
+
   const getTroopGifPath = (troop: any) => {
     const norm = normalizeType(troop?.type);
     if (!norm) return null;
     const gifType = troop.team === 'blue' ? 'player' : 'opponent';
     const cfg = TROOP_CONFIGS[norm];
-    const fromConfig = cfg?.gifPaths?.walk?.[gifType];
+
+    // Check if troop is in combat (attacking state)
+    const isAttacking = troop.state === 'ATTACKING_TOWER' || troop.state === 12; // TroopState.ATTACKING_TOWER = 12
+
+    // Select appropriate gif based on state
+    const gifPaths = isAttacking ? cfg?.gifPaths?.fight : cfg?.gifPaths?.walk;
+    const fallback = isAttacking ? FALLBACK_FIGHT[norm] : FALLBACK_WALK[norm];
+    const fromConfig = gifPaths?.[gifType];
 
     return (typeof fromConfig === "string" && fromConfig.length > 0)
       ? `${fromConfig}?v=${troop.id}`
-      : `${FALLBACK_WALK[norm][gifType]}?v=${troop.id}`;
+      : `${fallback[gifType]}?v=${troop.id}`;
   };
 
   const handleRestart = () => {
@@ -316,7 +330,7 @@ function ArenaContent() {
           ...acc,
           [tower.id]: {
             health: engineTower.health,
-            max_health: engineTower.maxHealth, // Use camelCase for consistency
+            maxHealth: engineTower.maxHealth, // Use camelCase for consistency
             isAlive: engineTower.isAlive,
             active: engineTower.active
           }
@@ -395,7 +409,7 @@ function ArenaContent() {
                         >
                           <TowerHealthBar
                             currentHealth={engineTower.health}
-                            maxHealth={engineTower.max_health}
+                            maxHealth={engineTower.maxHealth}
                             team={(tower as any).team}
                           />
                         </div>
@@ -429,7 +443,13 @@ function ArenaContent() {
                             src={gifPath}
                             alt={`${norm} ${t.team}`}
                             className="w-12 h-12 object-contain"
-                            style={{ transform: `scale(${typeof config?.scale === 'object' ? (config.scale.walk ?? 1) : (config?.scale ?? 1)})` }}
+                            style={{
+                              transform: `scale(${
+                                typeof config?.scale === 'object'
+                                  ? ((t.state === 'ATTACKING_TOWER' || t.state === 12) ? (config.scale.fight ?? 1) : (config.scale.walk ?? 1))
+                                  : (config?.scale ?? 1)
+                              })`
+                            }}
                           />
                           <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-gray-600 rounded">
                             <div
