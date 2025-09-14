@@ -528,8 +528,8 @@ function ArenaContent() {
           <Emote
             type={currentEmote.emoteType}
             position={{
-              x: (10 * (window.innerWidth * 0.8 / numCols)) + (window.innerWidth * 0.1), // col 10
-              y: (1 * (window.innerHeight * 0.38 / numRows)) + (window.innerHeight * 0.278) // row 1
+              x: (2.4 * (window.innerWidth * 0.8 / numCols)) + (window.innerWidth * 0.1), // col 2.4 (très légèrement à gauche)
+              y: (window.innerHeight * 0.278) - 130 // Légèrement plus haut (on soustrait 130px)
             }}
             onComplete={() => {}}
           />

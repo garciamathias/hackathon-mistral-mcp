@@ -45,8 +45,8 @@ const Emote: React.FC<EmoteProps> = ({ type, position, onComplete }) => {
           position: 'absolute',
           left: `${position.x}px`,
           top: `${position.y}px`,
-          width: '24px',
-          height: '24px',
+          width: '72px',  // x3 la taille (24px * 3)
+          height: '72px', // x3 la taille (24px * 3)
           zIndex: 1000,
           animation: 'emoteAnimation 3s ease-out forwards',
         }}
