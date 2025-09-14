@@ -1,0 +1,1504 @@
+
+# ====== engine/src/mcp/gameManager.ts ======
+import { v4 as uuidv4 } from 'uuid';
+import { WSManager } from '@websocket/WSManager';
+import {
+  MCPSession,
+  CreateGameResponse,
+  JoinGameResponse,
+  GameStatusResponse,
+  SpawnTroopResponse
+} from './types';
+
+export class MCPGameManager {
+  private sessions: Map<string, MCPSession> = new Map();
+  private wsManager: WSManager;
+
+  constructor(wsManager: WSManager) {
+    this.wsManager = wsManager;
+  }
+
+  private getOrCreateSession(sessionId?: string): MCPSession {
+    if (sessionId && this.sessions.has(sessionId)) {
+      const session = this.sessions.get(sessionId)!;
+      session.lastActivity = Date.now();
+      return session;
+    }
+
+    const newSession: MCPSession = {
+      sessionId: uuidv4(),
+      playerId: `mcp_${uuidv4().substring(0, 8)}`,
+      playerName: `Claude_${Math.floor(Math.random() * 1000)}`,
+      createdAt: Date.now(),
+      lastActivity: Date.now()
+    };
+
+    this.sessions.set(newSession.sessionId, newSession);
+    return newSession;
+  }
+
+  public createGame(playerName?: string, sessionId?: string): CreateGameResponse {
+    const session = this.getOrCreateSession(sessionId);
+
+    if (playerName) {
+      session.playerName = playerName;
+    }
+
+    // Create a new game room
+    const room = this.wsManager.createRoom();
+    const playerState = room.addPlayer(session.playerId, session.playerName);
+
+    if (!playerState) {
+      this.wsManager.removeRoom(room.id);
+      return {
+        success: false,
+        matchId: '',
+        team: 'red',
+        wsUrl: '',
+        message: 'Failed to create game room'
+      };
+    }
+
+    session.currentMatchId = room.id;
+    session.team = playerState.team;
+
+    return {
+      success: true,
+      matchId: room.id,
+      team: playerState.team,
+      wsUrl: `ws://localhost:3001?roomId=${room.id}&playerId=${session.playerId}`,
+      message: `Game created! You are on team ${playerState.team}. Match ID: ${room.id}`,
+      sessionId: session.sessionId,
+      playerId: session.playerId
+    };
+  }
+
+  public joinGame(matchId: string, playerName?: string, sessionId?: string): JoinGameResponse {
+    const session = this.getOrCreateSession(sessionId);
+
+    if (playerName) {
+      session.playerName = playerName;
+    }
+
+    console.log(`[MCPGameManager] Attempting to join game ${matchId} with player ${session.playerId} (${session.playerName})`);
+
+    const room = this.wsManager.getRoom(matchId);
+
+    if (!room) {
+      console.log(`[MCPGameManager] Room ${matchId} not found`);
+      return {
+        success: false,
+        matchId,
+        team: 'red',
+        wsUrl: '',
+        playerCount: 0,
+        message: 'Game not found'
+      };
+    }
+
+    // Check if this specific player is already in the room
+    const roomInfo = room.getRoomInfo();
+    const existingPlayer = roomInfo.players.find(p => p.id === session.playerId);
+
+    if (existingPlayer) {
+      console.log(`[MCPGameManager] Player ${session.playerId} already in room, returning existing state`);
+      session.currentMatchId = room.id;
+      session.team = existingPlayer.team;
+
+      return {
+        success: true,
+        matchId: room.id,
+        team: existingPlayer.team,
+        wsUrl: `ws://localhost:3001?roomId=${room.id}&playerId=${session.playerId}`,
+        playerCount: room.getPlayerCount(),
+        message: `Already in game on team ${existingPlayer.team}`,
+        sessionId: session.sessionId,
+        playerId: session.playerId
+      };
+    }
+
+    // Check if room is full (and player is not already in it)
+    if (room.isFull()) {
+      console.log(`[MCPGameManager] Room ${matchId} is full (${room.getPlayerCount()} players)`);
+      return {
+        success: false,
+        matchId,
+        team: 'red',
+        wsUrl: '',
+        playerCount: room.getPlayerCount(),
+        message: 'Game is full'
+      };
+    }
+
+    // Try to add player to the room
+    console.log(`[MCPGameManager] Adding player ${session.playerId} to room ${matchId}`);
+    const playerState = room.addPlayer(session.playerId, session.playerName);
+
+    if (!playerState) {
+      console.error(`[MCPGameManager] Failed to add player ${session.playerId} to room ${matchId}`);
+      return {
+        success: false,
+        matchId,
+        team: 'red',
+        wsUrl: '',
+        playerCount: room.getPlayerCount(),
+        message: 'Failed to join game - room may be full'
+      };
+    }
+
+    session.currentMatchId = matchId;
+    session.team = playerState.team;
+
+    console.log(`[MCPGameManager] Successfully joined game ${matchId} on team ${playerState.team}`);
+    console.log(`[MCPGameManager] Room now has ${room.getPlayerCount()} players`);
+
+    // Start game if room is now full
+    if (room.isFull()) {
+      console.log(`[MCPGameManager] Room is full, starting game`);
+      room.startGame();
+    }
+
+    return {
+      success: true,
+      matchId,
+      team: playerState.team,
+      wsUrl: `ws://localhost:3001?roomId=${matchId}&playerId=${session.playerId}`,
+      playerCount: room.getPlayerCount(),
+      message: `Joined game! You are on team ${playerState.team}. ${room.isFull() ? 'Game starting!' : 'Waiting for another player...'}`,
+      sessionId: session.sessionId,
+      playerId: session.playerId
+    };
+  }
+
+  public getGameStatus(matchId: string): GameStatusResponse | null {
+    const room = this.wsManager.getRoom(matchId);
+
+    if (!room) {
+      return null;
+    }
+
+    const snapshot = room.getSnapshot();
+
+    return {
+      matchId,
+      status: snapshot.status,
+      gameTime: snapshot.gameTime,
+      players: snapshot.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        team: p.team,
+        elixir: Math.floor(p.elixir),
+        crowns: p.crowns
+      })),
+      troops: snapshot.troops.map(t => ({
+        id: t.id,
+        type: t.type,
+        team: t.team,
+        position: { row: t.row, col: t.col },
+        health: Math.round(t.health),
+        maxHealth: t.maxHealth,
+        state: t.state
+      })),
+      towers: snapshot.towers.map(t => ({
+        id: t.id,
+        type: t.type as 'king' | 'princess',
+        team: t.team,
+        health: Math.round(t.health),
+        maxHealth: t.maxHealth,
+        position: t.position
+      }))
+    };
+  }
+
+  public spawnTroop(
+    matchId: string,
+    troopType: string,
+    row: number,
+    col: number,
+    sessionId?: string
+  ): SpawnTroopResponse {
+    const room = this.wsManager.getRoom(matchId);
+
+    if (!room) {
+      return {
+        success: false,
+        message: 'Game not found'
+      };
+    }
+
+    // Get session to know which player is making the move
+    let session = sessionId ? this.sessions.get(sessionId) : null;
+    let playerTeam: 'red' | 'blue' | undefined;
+
+    // If no session found, try to find the MCP player in the room
+    if (!session || !session.team) {
+      console.log(`[MCPGameManager] No session found for sessionId: ${sessionId}, trying fallback`);
+
+      // Get room info and find MCP player
+      const roomInfo = room.getRoomInfo();
+      const mcpPlayer = roomInfo.players.find(p => p.id.startsWith('mcp_'));
+
+      if (mcpPlayer) {
+        console.log(`[MCPGameManager] Found MCP player ${mcpPlayer.id} on team ${mcpPlayer.team}`);
+        playerTeam = mcpPlayer.team;
+
+        // Create/update session for this player
+        if (!session) {
+          session = {
+            sessionId: sessionId || `auto_${Date.now()}`,
+            playerId: mcpPlayer.id,
+            playerName: mcpPlayer.name,
+            team: mcpPlayer.team,
+            currentMatchId: matchId,
+            createdAt: Date.now(),
+            lastActivity: Date.now()
+          };
+          this.sessions.set(session.sessionId, session);
+        } else {
+          session.team = mcpPlayer.team;
+        }
+      } else {
+        return {
+          success: false,
+          message: 'No MCP player found in the game'
+        };
+      }
+    } else {
+      playerTeam = session.team;
+    }
+
+    // Validate spawn position for team
+    if (playerTeam === 'red') {
+      if (row < 0 || row > 16) {
+        return {
+          success: false,
+          message: 'Invalid spawn position for red team (must be rows 0-16)'
+        };
+      }
+    } else if (playerTeam === 'blue') {
+      if (row < 17 || row > 33) {
+        return {
+          success: false,
+          message: 'Invalid spawn position for blue team (must be rows 17-33)'
+        };
+      }
+    } else {
+      return {
+        success: false,
+        message: 'Team not defined'
+      };
+    }
+
+    // Get the player's current elixir
+    const snapshot = room.getSnapshot();
+    const player = snapshot.players.find(p => p.id === session.playerId);
+
+    if (!player) {
+      return {
+        success: false,
+        message: 'Player not found in game'
+      };
+    }
+
+    // Check elixir cost
+    const troopCosts: Record<string, number> = {
+      'giant': 5,
+      'babyDragon': 4,
+      'miniPekka': 4,
+      'valkyrie': 4
+    };
+
+    const cost = troopCosts[troopType] || 0;
+    if (player.elixir < cost) {
+      return {
+        success: false,
+        message: `Not enough elixir (have ${Math.floor(player.elixir)}, need ${cost})`,
+        elixirRemaining: Math.floor(player.elixir)
+      };
+    }
+
+    // Queue the action
+    room.queueAction({
+      type: 'PLAY_CARD',
+      playerId: session.playerId,
+      timestamp: Date.now(),
+      data: {
+        troopType,
+        position: { row, col }
+      }
+    });
+
+    return {
+      success: true,
+      troopId: `troop_${uuidv4().substring(0, 8)}`,
+      message: `${troopType} deployed at position (${row}, ${col})`,
+      elixirRemaining: Math.floor(player.elixir - cost)
+    };
+  }
+
+  public getSession(sessionId: string): MCPSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  public cleanupOldSessions(): void {
+    const now = Date.now();
+    const timeout = 30 * 60 * 1000; // 30 minutes
+
+    for (const [id, session] of this.sessions.entries()) {
+      if (now - session.lastActivity > timeout) {
+        this.sessions.delete(id);
+      }
+    }
+  }
+}
+
+# ====== engine/src/mcp/mcpServer.ts ======
+import {
+  JSONRPCRequest,
+  JSONRPCResponse,
+  JSONRPCError,
+  InitializeResult,
+  ToolCallParams,
+  ToolCallResult,
+  ListToolsResult,
+  ListResourcesResult,
+  ListPromptsResult,
+  MCPErrorCode
+} from './protocol';
+import { MCPTools } from './tools';
+
+export class MCPServer {
+  private initialized: boolean = false;
+  private mcpTools: MCPTools;
+  private sessionId?: string;
+
+  constructor(mcpTools: MCPTools) {
+    this.mcpTools = mcpTools;
+  }
+
+  public async handleRequest(request: JSONRPCRequest): Promise<JSONRPCResponse> {
+    try {
+      // Extract session ID if present
+      if (request.params?.sessionId) {
+        this.sessionId = request.params.sessionId;
+      }
+
+      switch (request.method) {
+        case 'initialize':
+          return this.handleInitialize(request);
+
+        case 'initialized':
+          return this.handleInitialized(request);
+
+        case 'tools/list':
+          return this.handleToolsList(request);
+
+        case 'tools/call':
+          return this.handleToolCall(request);
+
+        case 'resources/list':
+          return this.handleResourcesList(request);
+
+        case 'prompts/list':
+          return this.handlePromptsList(request);
+
+        case 'ping':
+          return this.createResponse(request.id, { pong: true });
+
+        default:
+          return this.createErrorResponse(
+            request.id,
+            MCPErrorCode.MethodNotFound,
+            `Method not found: ${request.method}`
+          );
+      }
+    } catch (error) {
+      console.error('MCP Server error:', error);
+      return this.createErrorResponse(
+        request.id || null,
+        MCPErrorCode.InternalError,
+        error instanceof Error ? error.message : 'Internal server error'
+      );
+    }
+  }
+
+  private handleInitialize(request: JSONRPCRequest): JSONRPCResponse {
+    // const params = request.params as InitializeParams;
+
+    if (this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.AlreadyInitialized,
+        'Server already initialized'
+      );
+    }
+
+    this.initialized = true;
+
+    const result: InitializeResult = {
+      protocolVersion: '2024-11-05',
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {}
+      },
+      serverInfo: {
+        name: 'clash-royale-mcp-server',
+        version: '1.0.0'
+      }
+    };
+
+    return this.createResponse(request.id, result);
+  }
+
+  private handleInitialized(request: JSONRPCRequest): JSONRPCResponse {
+    if (!this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.NotInitialized,
+        'Server not initialized'
+      );
+    }
+
+    // Notification, no response needed
+    if (request.id === null || request.id === undefined) {
+      return this.createResponse(null, {});
+    }
+
+    return this.createResponse(request.id, {});
+  }
+
+  private handleToolsList(request: JSONRPCRequest): JSONRPCResponse {
+    if (!this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.NotInitialized,
+        'Server not initialized'
+      );
+    }
+
+    const tools = this.mcpTools.getTools();
+    const result: ListToolsResult = {
+      tools: tools.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      }))
+    };
+
+    return this.createResponse(request.id, result);
+  }
+
+  private async handleToolCall(request: JSONRPCRequest): Promise<JSONRPCResponse> {
+    if (!this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.NotInitialized,
+        'Server not initialized'
+      );
+    }
+
+    const params = request.params as ToolCallParams;
+
+    if (!params.name) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.InvalidParams,
+        'Tool name is required'
+      );
+    }
+
+    try {
+      const result = await this.mcpTools.executeTool(
+        params.name,
+        params.arguments || {},
+        this.sessionId
+      );
+
+      // Convert the result to MCP format
+      const toolResult: ToolCallResult = {
+        content: result.content || [],
+        isError: false
+      };
+
+      return this.createResponse(request.id, toolResult);
+    } catch (error) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.ToolNotFound,
+        error instanceof Error ? error.message : `Tool execution failed: ${params.name}`
+      );
+    }
+  }
+
+  private handleResourcesList(request: JSONRPCRequest): JSONRPCResponse {
+    if (!this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.NotInitialized,
+        'Server not initialized'
+      );
+    }
+
+    // No resources for now
+    const result: ListResourcesResult = {
+      resources: []
+    };
+
+    return this.createResponse(request.id, result);
+  }
+
+  private handlePromptsList(request: JSONRPCRequest): JSONRPCResponse {
+    if (!this.initialized) {
+      return this.createErrorResponse(
+        request.id,
+        MCPErrorCode.NotInitialized,
+        'Server not initialized'
+      );
+    }
+
+    // No prompts for now
+    const result: ListPromptsResult = {
+      prompts: []
+    };
+
+    return this.createResponse(request.id, result);
+  }
+
+  private createResponse(id: string | number | null | undefined, result: any): JSONRPCResponse {
+    return {
+      jsonrpc: '2.0',
+      id: id !== undefined ? id : null,
+      result
+    };
+  }
+
+  private createErrorResponse(
+    id: string | number | null | undefined,
+    code: number,
+    message: string,
+    data?: any
+  ): JSONRPCResponse {
+    const error: JSONRPCError = {
+      code,
+      message
+    };
+
+    if (data !== undefined) {
+      error.data = data;
+    }
+
+    return {
+      jsonrpc: '2.0',
+      id: id !== undefined ? id : null,
+      error
+    };
+  }
+
+  public reset(): void {
+    this.initialized = false;
+    this.sessionId = undefined;
+  }
+}
+
+# ====== engine/src/mcp/mcpServerNew.ts ======
+const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
+import { z } from "zod";
+import { MCPGameManager } from './gameManager';
+
+type CallToolResult = any;
+
+export const getMCPServer = (gameManager: MCPGameManager): any => {
+  const server = new McpServer(
+    {
+      name: "clash-royale-mcp-server",
+      version: "1.0.0",
+    },
+    { capabilities: {} },
+  );
+
+  // Create Game Tool
+  server.tool(
+    "create_game",
+    "Create a new Clash Royale match",
+    {
+      player_name: z.string().optional().describe("Name of the player creating the game"),
+      session_id: z.string().optional().describe("Optional session ID to maintain context"),
+    },
+    async ({ player_name, session_id }: { player_name?: string; session_id?: string }): Promise<CallToolResult> => {
+      const result = gameManager.createGame(player_name, session_id);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // Join Game Tool
+  server.tool(
+    "join_game",
+    "Join an existing Clash Royale match",
+    {
+      match_id: z.string().describe("ID of the match to join"),
+      player_name: z.string().optional().describe("Name of the player joining"),
+      session_id: z.string().optional().describe("Optional session ID to maintain context"),
+    },
+    async ({ match_id, player_name, session_id }: { match_id: string; player_name?: string; session_id?: string }): Promise<CallToolResult> => {
+      const result = gameManager.joinGame(match_id, player_name, session_id);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // Get Game Status Tool
+  server.tool(
+    "get_game_status",
+    "Get the current status of a Clash Royale match",
+    {
+      match_id: z.string().describe("ID of the match to check"),
+    },
+    async ({ match_id }: { match_id: string }): Promise<CallToolResult> => {
+      const status = gameManager.getGameStatus(match_id);
+
+      if (!status) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                success: false,
+                message: "Game not found",
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(status, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // Spawn Troop Tool
+  server.tool(
+    "spawn_troop",
+    "Deploy a troop in the game at a specific position",
+    {
+      match_id: z.string().describe("ID of the match"),
+      troop_type: z.enum(["giant", "babyDragon", "miniPekka", "valkyrie"])
+        .describe("Type of troop to spawn"),
+      row: z.number().int().min(0).max(33).describe("Row position (0-16 for red team, 17-33 for blue team)"),
+      col: z.number().int().min(0).max(18).describe("Column position (0-18)"),
+      session_id: z.string().optional().describe("Optional session ID to maintain context"),
+    },
+    async ({ match_id, troop_type, row, col, session_id }: { match_id: string; troop_type: 'giant' | 'babyDragon' | 'miniPekka' | 'valkyrie'; row: number; col: number; session_id?: string }): Promise<CallToolResult> => {
+      const result = gameManager.spawnTroop(match_id, troop_type, row, col, session_id);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  // List Available Games Tool
+  server.tool(
+    "list_games",
+    "List all available games",
+    {},
+    async (): Promise<CallToolResult> => {
+      const rooms = gameManager['wsManager'].getRoomList();
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              games: rooms.map(room => ({
+                id: room.id,
+                playerCount: room.playerCount,
+                maxPlayers: room.maxPlayers,
+                status: room.status,
+              })),
+              totalGames: rooms.length,
+            }, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  return server;
+};
+
+# ====== engine/src/mcp/protocol.ts ======
+// MCP Protocol Types and Interfaces
+
+export interface JSONRPCRequest {
+  jsonrpc: '2.0';
+  method: string;
+  params?: any;
+  id?: string | number | null;
+}
+
+export interface JSONRPCResponse {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: any;
+  error?: JSONRPCError;
+}
+
+export interface JSONRPCError {
+  code: number;
+  message: string;
+  data?: any;
+}
+
+// MCP Protocol Methods
+export interface InitializeParams {
+  protocolVersion: string;
+  capabilities?: {
+    experimental?: Record<string, any>;
+    roots?: {
+      listChanged?: boolean;
+    };
+    sampling?: Record<string, any>;
+  };
+  clientInfo?: {
+    name: string;
+    version?: string;
+  };
+}
+
+export interface InitializeResult {
+  protocolVersion: string;
+  capabilities: {
+    tools?: Record<string, any>;
+    resources?: Record<string, any>;
+    prompts?: Record<string, any>;
+    logging?: Record<string, any>;
+  };
+  serverInfo: {
+    name: string;
+    version: string;
+  };
+}
+
+export interface Tool {
+  name: string;
+  description?: string;
+  inputSchema?: {
+    type: string;
+    properties?: Record<string, any>;
+    required?: string[];
+  };
+}
+
+export interface ToolCallParams {
+  name: string;
+  arguments?: any;
+}
+
+export interface ToolCallResult {
+  content: Array<{
+    type: 'text' | 'image' | 'resource';
+    text?: string;
+    data?: string;
+    mimeType?: string;
+    uri?: string;
+  }>;
+  isError?: boolean;
+}
+
+export interface ListToolsResult {
+  tools: Tool[];
+}
+
+export interface Resource {
+  uri: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface ListResourcesResult {
+  resources: Resource[];
+}
+
+export interface Prompt {
+  name: string;
+  description?: string;
+  arguments?: Array<{
+    name: string;
+    description?: string;
+    required?: boolean;
+  }>;
+}
+
+export interface ListPromptsResult {
+  prompts: Prompt[];
+}
+
+// Error codes
+export enum MCPErrorCode {
+  ParseError = -32700,
+  InvalidRequest = -32600,
+  MethodNotFound = -32601,
+  InvalidParams = -32602,
+  InternalError = -32603,
+
+  // MCP specific
+  NotInitialized = -32001,
+  AlreadyInitialized = -32002,
+  ResourceNotFound = -32003,
+  ToolNotFound = -32004,
+  PromptNotFound = -32005,
+}
+
+# ====== engine/src/mcp/tools.ts ======
+import { MCPGameManager } from './gameManager';
+import { MCPTool, MCPToolResult } from './types';
+
+export class MCPTools {
+  private gameManager: MCPGameManager;
+  private tools: MCPTool[] = [];
+
+  constructor(gameManager: MCPGameManager) {
+    this.gameManager = gameManager;
+    this.initializeTools();
+  }
+
+  private initializeTools(): void {
+    // Tool 1: Create Game
+    this.tools.push({
+      name: 'create_game',
+      description: 'Create a new Clash Royale game match',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          playerName: {
+            type: 'string',
+            description: 'Name of the player creating the game (optional)'
+          }
+        }
+      }
+    });
+
+    // Tool 2: Join Game
+    this.tools.push({
+      name: 'join_game',
+      description: 'Join an existing Clash Royale game match',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          matchId: {
+            type: 'string',
+            description: 'The ID of the match to join'
+          },
+          playerName: {
+            type: 'string',
+            description: 'Name of the player joining the game (optional)'
+          }
+        },
+        required: ['matchId']
+      }
+    });
+
+    // Tool 3: Get Game Status
+    this.tools.push({
+      name: 'get_game_status',
+      description: 'Get the current status of a game including troops, towers, and players',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          matchId: {
+            type: 'string',
+            description: 'The ID of the match to check'
+          }
+        },
+        required: ['matchId']
+      }
+    });
+
+    // Tool 4: Spawn Troop
+    this.tools.push({
+      name: 'spawn_troop',
+      description: 'Deploy a troop on the battlefield',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          matchId: {
+            type: 'string',
+            description: 'The ID of the match'
+          },
+          troopType: {
+            type: 'string',
+            enum: ['giant', 'babyDragon', 'miniPekka', 'valkyrie'],
+            description: 'Type of troop to spawn'
+          },
+          row: {
+            type: 'number',
+            minimum: 0,
+            maximum: 33,
+            description: 'Row position (0-16 for red team, 17-33 for blue team)'
+          },
+          col: {
+            type: 'number',
+            minimum: 0,
+            maximum: 17,
+            description: 'Column position (0-17)'
+          }
+        },
+        required: ['matchId', 'troopType', 'row', 'col']
+      }
+    });
+  }
+
+  public getTools(): MCPTool[] {
+    return this.tools;
+  }
+
+  public async executeTool(name: string, args: any, sessionId?: string): Promise<MCPToolResult> {
+    try {
+      switch (name) {
+        case 'create_game':
+          return this.handleCreateGame(args, sessionId);
+
+        case 'join_game':
+          return this.handleJoinGame(args, sessionId);
+
+        case 'get_game_status':
+          return this.handleGetGameStatus(args);
+
+        case 'spawn_troop':
+          return this.handleSpawnTroop(args, sessionId);
+
+        default:
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({
+                error: `Unknown tool: ${name}`
+              })
+            }]
+          };
+      }
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+          })
+        }]
+      };
+    }
+  }
+
+  private async handleCreateGame(args: any, sessionId?: string): Promise<MCPToolResult> {
+    const { playerName } = args;
+    const result = this.gameManager.createGame(playerName, sessionId);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  }
+
+  private async handleJoinGame(args: any, sessionId?: string): Promise<MCPToolResult> {
+    const { matchId, playerName } = args;
+
+    if (!matchId) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'matchId is required'
+          })
+        }]
+      };
+    }
+
+    const result = this.gameManager.joinGame(matchId, playerName, sessionId);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  }
+
+  private async handleGetGameStatus(args: any): Promise<MCPToolResult> {
+    const { matchId } = args;
+
+    if (!matchId) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'matchId is required'
+          })
+        }]
+      };
+    }
+
+    const status = this.gameManager.getGameStatus(matchId);
+
+    if (!status) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'Game not found'
+          })
+        }]
+      };
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(status, null, 2)
+      }]
+    };
+  }
+
+  private async handleSpawnTroop(args: any, sessionId?: string): Promise<MCPToolResult> {
+    const { matchId, troopType, row, col } = args;
+
+    if (!matchId || !troopType || row === undefined || col === undefined) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'matchId, troopType, row, and col are required'
+          })
+        }]
+      };
+    }
+
+    // Validate troop type
+    const validTroops = ['giant', 'babyDragon', 'miniPekka', 'valkyrie'];
+    if (!validTroops.includes(troopType)) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: `Invalid troopType. Must be one of: ${validTroops.join(', ')}`
+          })
+        }]
+      };
+    }
+
+    // Validate position
+    if (row < 0 || row > 33 || col < 0 || col > 17) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'Invalid position. Row must be 0-33, col must be 0-17'
+          })
+        }]
+      };
+    }
+
+    const result = this.gameManager.spawnTroop(matchId, troopType, row, col, sessionId);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  }
+}
+
+# ====== engine/src/mcp/types.ts ======
+// MCP Types and Interfaces for Clash Royale Game Server
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+
+export interface MCPToolResult {
+  content: Array<{
+    type: 'text';
+    text: string;
+  }>;
+}
+
+export interface MCPError {
+  code: string;
+  message: string;
+  details?: any;
+}
+
+// MCP Tool Parameters
+export interface CreateGameParams {
+  playerName?: string;
+}
+
+export interface JoinGameParams {
+  matchId: string;
+  playerName?: string;
+}
+
+export interface GetGameStatusParams {
+  matchId: string;
+}
+
+export interface SpawnTroopParams {
+  matchId: string;
+  troopType: 'giant' | 'babyDragon' | 'miniPekka' | 'valkyrie';
+  row: number;
+  col: number;
+}
+
+// MCP Session Management
+export interface MCPSession {
+  sessionId: string;
+  playerId: string;
+  playerName: string;
+  currentMatchId?: string;
+  team?: 'red' | 'blue';
+  createdAt: number;
+  lastActivity: number;
+}
+
+// MCP Response Types
+export interface CreateGameResponse {
+  success: boolean;
+  matchId: string;
+  team: 'red' | 'blue';
+  wsUrl: string;
+  message: string;
+  sessionId?: string; // Session ID to use for subsequent calls
+  playerId?: string;  // Player ID for reference
+}
+
+export interface JoinGameResponse {
+  success: boolean;
+  matchId: string;
+  team: 'red' | 'blue';
+  wsUrl: string;
+  playerCount: number;
+  message: string;
+  sessionId?: string; // Session ID to use for subsequent calls
+  playerId?: string;  // Player ID for reference
+}
+
+export interface GameStatusResponse {
+  matchId: string;
+  status: string;
+  gameTime: number;
+  players: Array<{
+    id: string;
+    name: string;
+    team: 'red' | 'blue';
+    elixir: number;
+    crowns: number;
+  }>;
+  troops: Array<{
+    id: string;
+    type: string;
+    team: 'red' | 'blue';
+    position: { row: number; col: number };
+    health: number;
+    maxHealth: number;
+    state: string;
+  }>;
+  towers: Array<{
+    id: string;
+    type: 'king' | 'princess';
+    team: 'red' | 'blue';
+    health: number;
+    maxHealth: number;
+    position: { row: number; col: number };
+  }>;
+}
+
+export interface SpawnTroopResponse {
+  success: boolean;
+  troopId?: string;
+  message: string;
+  elixirRemaining?: number;
+}
+
+# ====== engine/src/server.ts ======
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { createServer } from 'http';
+import { WSManager } from '@websocket/WSManager';
+import { createMatchRoutes } from '@api/routes/match';
+import { createGameRoutes } from '@api/routes/game';
+import { SERVER_CONFIG } from '@config/constants';
+import { MCPGameManager } from '@/mcp/gameManager';
+const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
+import { getMCPServer } from '@/mcp/mcpServerNew';
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+const httpServer = createServer(app);
+const PORT = process.env.PORT || SERVER_CONFIG.DEFAULT_PORT;
+const WS_PORT = process.env.WS_PORT || PORT; // Use same port for HTTP and WS
+
+// Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true
+}));
+app.use(express.json());
+
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: Date.now(),
+    uptime: process.uptime()
+  });
+});
+
+// API Info endpoint
+app.get('/api', (_req, res) => {
+  res.json({
+    name: 'Clash Royale Game Server',
+    version: '1.0.0',
+    endpoints: {
+      health: 'GET /health',
+      matches: {
+        create: 'POST /api/match/create',
+        join: 'POST /api/match/join',
+        info: 'GET /api/match/:matchId',
+        list: 'GET /api/match'
+      },
+      game: {
+        playCard: 'POST /api/game/play_card',
+        state: 'GET /api/game/state/:matchId',
+        action: 'POST /api/game/action',
+        troops: 'GET /api/game/troops'
+      },
+      mcp: {
+        endpoint: 'POST /mcp',
+        tools: 'GET /mcp/tools'
+      }
+    },
+    websocket: {
+      url: `ws://localhost:${WS_PORT}`,
+      params: {
+        roomId: 'Match room ID',
+        playerId: 'Player ID'
+      }
+    }
+  });
+});
+
+// Initialize managers as placeholders
+let wsManager: WSManager;
+let mcpGameManager: MCPGameManager;
+let matchRouter: any;
+let gameRouter: any;
+
+// Setup API route placeholders
+app.use('/api/match', (req, res, next) => {
+  if (!matchRouter) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Server is starting up, please try again' },
+      timestamp: Date.now()
+    });
+  }
+  return matchRouter(req, res, next);
+});
+
+app.use('/api/game', (req, res, next) => {
+  if (!gameRouter) {
+    return res.status(503).json({
+      success: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Server is starting up, please try again' },
+      timestamp: Date.now()
+    });
+  }
+  return gameRouter(req, res, next);
+});
+
+// MCP Endpoint using SDK
+app.post('/mcp', async (req, res) => {
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+
+    res.on('close', () => {
+      transport.close();
+    });
+
+    const server = getMCPServer(mcpGameManager);
+    await server.connect(transport);
+
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error('MCP error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : 'Internal server error',
+        },
+        id: null,
+      });
+    }
+  }
+});
+
+// MCP GET endpoint (method not allowed)
+app.get('/mcp', (_req, res) => {
+  console.log('Received GET MCP request');
+  res.status(405).json({
+    jsonrpc: '2.0',
+    error: {
+      code: -32000,
+      message: 'Method not allowed. Use POST.',
+    },
+    id: null,
+  });
+});
+
+// Error handling middleware
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred'
+    },
+    timestamp: Date.now()
+  });
+});
+
+// 404 handler
+app.use((_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Endpoint not found'
+    },
+    timestamp: Date.now()
+  });
+});
+
+// Start server
+httpServer.listen(PORT, () => {
+  // Initialize WebSocket Manager after server is listening
+  wsManager = new WSManager(httpServer);
+  mcpGameManager = new MCPGameManager(wsManager);
+
+  // Now initialize the routes with the actual wsManager
+  matchRouter = createMatchRoutes(wsManager);
+  gameRouter = createGameRoutes(wsManager);
+  console.log(`
+╔════════════════════════════════════════════╗
+║   🎮 Clash Royale Game Server Started! 🎮   ║
+╚════════════════════════════════════════════╝
+
+🌐 HTTP Server:    http://localhost:${PORT}
+🔌 WebSocket:      ws://localhost:${WS_PORT}
+🎯 Environment:    ${process.env.NODE_ENV || 'development'}
+⏱️  Tick Rate:      ${SERVER_CONFIG.TICK_RATE} Hz
+👥 Max Players:    ${SERVER_CONFIG.MAX_PLAYERS_PER_ROOM} per room
+🏠 Max Rooms:      ${SERVER_CONFIG.MAX_ROOMS}
+
+API Endpoints:
+  - POST /api/match/create     Create new match
+  - POST /api/match/join       Join existing match
+  - POST /api/game/play_card   Play a card
+  - GET  /api/game/state/:id   Get game state
+  - GET  /health               Health check
+
+Press Ctrl+C to stop the server
+  `);
+
+  console.log('✅ WebSocket Manager initialized and ready for connections');
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down server...');
+  if (wsManager) wsManager.shutdown();
+  httpServer.close(() => {
+    console.log('✅ Server shut down gracefully');
+    process.exit(0);
+  });
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Received SIGTERM, shutting down...');
+  if (wsManager) wsManager.shutdown();
+  httpServer.close(() => {
+    console.log('✅ Server shut down gracefully');
+    process.exit(0);
+  });
+});
+
+export default app;
+
+# ====== engine/src/index.ts ======
+// Entry point that registers path mappings before starting the server
+const tsConfigPaths = require('tsconfig-paths');
+const path = require('path');
+
+// Register tsconfig-paths with the proper base URL for production
+// This file will be compiled to dist/index.js, so the base is the dist folder itself
+const baseUrl = __dirname;
+
+tsConfigPaths.register({
+  baseUrl,
+  paths: {
+    "@/*": ["*"],
+    "@shared/*": ["types/shared/*"],
+    "@core/*": ["core/*"],
+    "@api/*": ["api/*"],
+    "@websocket/*": ["websocket/*"],
+    "@utils/*": ["utils/*"],
+    "@config/*": ["config/*"]
+  }
+});
+
+// Now import and start the server
+require('./server');

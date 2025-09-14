@@ -30,7 +30,7 @@ def concat_files_to_txt(file_list, output_path="code_to_send.txt"):
 
 if __name__ == "__main__":
     # Exemple d'utilisation : à adapter selon vos besoins
-    files = [
+    ui = [
         "ui/src/app/api/game/[id]/state/route.ts",
         "ui/src/app/api/game/init/route.ts",
         "ui/src/app/api/game/spawn/route.ts",
@@ -63,4 +63,16 @@ if __name__ == "__main__":
         "ui/src/types/backend.ts",
     ]
 
-    concat_files_to_txt(files, "code_to_send.txt")
+    engine = [
+        "engine/src/mcp/gameManager.ts",
+        "engine/src/mcp/mcpServer.ts",
+        "engine/src/mcp/mcpServerNew.ts",
+        "engine/src/mcp/protocol.ts",
+        "engine/src/mcp/tools.ts",
+        "engine/src/mcp/types.ts",
+        "engine/src/server.ts",
+        "engine/src/index.ts"
+    ]
+
+    concat_files_to_txt(ui, "code_to_send_ui.txt")
+    concat_files_to_txt(engine, "code_to_send_engine.txt")
