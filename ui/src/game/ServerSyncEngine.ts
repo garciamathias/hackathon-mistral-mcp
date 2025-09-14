@@ -91,7 +91,7 @@ export class ServerSyncEngine extends GameEngine {
       // Start syncing with server
       this.startServerSync();
 
-      return this.gameId;
+      return this.gameId!;
     } catch (error) {
       console.error('Error initializing server game:', error);
       throw error;
@@ -285,7 +285,7 @@ export class ServerSyncEngine extends GameEngine {
         try {
           const error = JSON.parse(errorText);
           console.error('Error details:', error);
-        } catch (e) {
+        } catch {
           console.error('Could not parse error response');
         }
         return false;

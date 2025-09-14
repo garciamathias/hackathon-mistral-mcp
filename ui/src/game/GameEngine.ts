@@ -13,12 +13,12 @@ export interface GameState {
 }
 
 export class GameEngine {
-  private troops: Map<string, TroopEntity> = new Map();
-  private towers: Map<string, TowerEntity> = new Map();
-  private gameState: GameState;
+  protected troops: Map<string, TroopEntity> = new Map();
+  protected towers: Map<string, TowerEntity> = new Map();
+  protected gameState: GameState;
   private animationFrameId: number | null = null;
-  private onUpdateCallback?: (troops: BaseTroop[]) => void;
-  private onGameEndCallback?: (winner: 'red' | 'blue') => void;
+  protected onUpdateCallback?: (troops: BaseTroop[]) => void;
+  protected onGameEndCallback?: (winner: 'red' | 'blue') => void;
 
   constructor() {
     this.gameState = {
