@@ -167,17 +167,25 @@ export const useOnlineGame = (): OnlineGameHookReturn => {
   };
 
   const convertTowers = (towerData: TowerData[]): Tower[] => {
-    return towerData.map(tower => ({
-      id: tower.id,
-      type: tower.type,
-      team: tower.team,
-      row: tower.position.row,
-      col: tower.position.col,
-      health: tower.health,
-      maxHealth: tower.maxHealth,
-      isAlive: tower.isAlive,
-      active: tower.active,
-      position: tower.position
+    return towerData.map<Tower>(t => ({
+      id: t.id,
+      type: t.type,
+      team: t.team,
+      row: t.position.row,
+      col: t.position.col,
+      health: t.health,
+      maxHealth: t.maxHealth,
+      isAlive: t.isAlive,
+      active: t.active,
+      position: t.position,
+      // Champs requis par le type Tower côté moteur
+      lastAttackTime: t.lastAttackTime ?? 0,
+      isAttacking: false,
+      canAttack: true,
+      // Optionnels si présents dans votre type Tower (sans impact si inconnus)
+      damage: (t as any).damage,
+      attackSpeed: (t as any).attackSpeed,
+      range: (t as any).range,
     }));
   };
 

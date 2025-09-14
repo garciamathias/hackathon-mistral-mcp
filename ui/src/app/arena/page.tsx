@@ -12,7 +12,14 @@ import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 import { GameStatus } from "@/types/backend";
-import { GameState } from "@/game/GameEngine";
+// État renvoyé par l'API locale /api/game/[id]/state
+type BackendGameState = {
+  troops: any[];
+  towers: Record<string, { id: string; team: 'red'|'blue'; type: 'king'|'princess'; health: number; max_health: number; position: {row:number; col:number} }>;
+  is_game_over: boolean;
+  winner: 'red' | 'blue' | null;
+  [k: string]: any;
+};
 
 function ArenaContent() {
   const searchParams = useSearchParams();
@@ -30,7 +37,7 @@ function ArenaContent() {
   const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
   const params = useSearchParams();
   const gameId = params.get("game_id");
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [gameState, setGameState] = useState<BackendGameState | null>(null);
 
   const isArenaVisible = true;
 
@@ -321,24 +328,25 @@ function ArenaContent() {
 
   // Get game data based on mode
   const gameTroops = isOnlineMode ? troops : (gameState?.troops ?? []);
-  const gameTowers = isOnlineMode ?
-    Object.values(TOWER).reduce((acc, tower) => {
-      const engineTower = gameEngineTowers.find(t => t.id === tower.id);
-      // Only include tower data if it exists in the engine
-      if (engineTower) {
-        return {
-          ...acc,
-          [tower.id]: {
+  const gameTowers = isOnlineMode
+    ? Object.values(TOWER).reduce((acc, tower) => {
+        const engineTower = gameEngineTowers.find(t => t.id === tower.id);
+        if (engineTower) {
+          acc[tower.id] = {
             health: engineTower.health,
-            maxHealth: engineTower.maxHealth, // Use camelCase for consistency
+            maxHealth: engineTower.maxHealth,
             isAlive: engineTower.isAlive,
             active: engineTower.active
-          }
-        };
-      }
-      return acc;
-    }, {} as any) :
-    gameState?.towers;
+          };
+        }
+        return acc;
+      }, {} as Record<string, {health:number; maxHealth:number; isAlive?:boolean; active?:boolean}>)
+    : Object.fromEntries(
+        Object.entries(gameState?.towers ?? {}).map(([id, t]) => [
+          id,
+          { ...t, maxHealth: (t as any).max_health }
+        ])
+      );
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -346,7 +354,7 @@ function ArenaContent() {
 
       {(isOnlineMode ? gameEnded : gameState?.is_game_over) &&
        (isOnlineMode ? winner : gameState?.winner) &&
-       <GameEndScreen winner={(isOnlineMode ? winner : gameState.winner) as "red" | "blue"} onRestart={handleRestart} />}
+       <GameEndScreen winner={(isOnlineMode ? winner : gameState?.winner) as "red" | "blue"} onRestart={handleRestart} />}
 
       <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
         <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
@@ -384,7 +392,7 @@ function ArenaContent() {
                   {shouldShowTower && (() => {
                     const engineTower = gameTowers?.[tower!.id];
                     // Check if tower exists and is alive
-                    if (!engineTower || engineTower.health <= 0 || !engineTower.isAlive) {
+                    if (!engineTower || engineTower.health <= 0 || !(engineTower as any).isAlive) {
                       return null; // Don't show destroyed towers
                     }
 
