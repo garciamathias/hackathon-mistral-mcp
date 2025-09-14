@@ -116,8 +116,8 @@ export class GameClient {
     // Send via WebSocket for real-time update
     this.wsClient.playCard(troopType, { row, col });
 
-    // Also send via REST API as backup
-    apiClient.playCard(this.currentMatchId, troopType, { row, col });
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.playCard(this.currentMatchId, troopType, { row, col });
   }
 
   private canPlayCard(troopType: string): boolean {
@@ -139,21 +139,24 @@ export class GameClient {
     if (!this.currentMatchId) return;
 
     this.wsClient.sendGameAction('PAUSE');
-    apiClient.performGameAction(this.currentMatchId, 'PAUSE');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'PAUSE');
   }
 
   resumeGame(): void {
     if (!this.currentMatchId) return;
 
     this.wsClient.sendGameAction('RESUME');
-    apiClient.performGameAction(this.currentMatchId, 'RESUME');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'RESUME');
   }
 
   surrender(): void {
     if (!this.currentMatchId) return;
 
     this.wsClient.sendGameAction('SURRENDER');
-    apiClient.performGameAction(this.currentMatchId, 'SURRENDER');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'SURRENDER');
   }
 
   // State Management

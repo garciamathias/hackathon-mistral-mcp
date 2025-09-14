@@ -3,37 +3,46 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function ClashTimer() {
+interface ClashTimerProps {
+  gameTime?: number; // For online mode
+  isOnlineMode?: boolean;
+}
+
+export default function ClashTimer({ gameTime, isOnlineMode = false }: ClashTimerProps) {
   const [timeLeft, setTimeLeft] = useState(180); // 3:00 in seconds
   const params = useSearchParams();
   const gameId = params.get("game_id");
 
   useEffect(() => {
-    if (!gameId) return;
+    if (isOnlineMode && gameTime !== undefined) {
+      // Online mode: Use the provided game time
+      const remainingTime = Math.round(Math.max(0, 180 - gameTime));
+      setTimeLeft(remainingTime);
+    } else if (!isOnlineMode && gameId) {
+      // Local mode: Fetch from API
+      const updateTimer = async () => {
+        try {
+          const res = await fetch(`/api/game/${gameId}/state`);
+          const gameState = await res.json();
+          const serverTime = gameState.game_time || 0;
 
-    // Utiliser le temps du serveur au lieu d'un timer local
-    const updateTimer = async () => {
-      try {
-        const res = await fetch(`/api/game/${gameId}/state`);
-        const gameState = await res.json();
-        const serverTime = gameState.game_time || 0;
-        
-        // Calculer le temps restant (180 secondes - temps écoulé)
-        const remainingTime = Math.round(Math.max(0, 180 - serverTime));
-        setTimeLeft(remainingTime);
-      } catch (error) {
-        console.error("Failed to fetch game state for timer:", error);
-      }
-    };
+          // Calculer le temps restant (180 secondes - temps écoulé)
+          const remainingTime = Math.round(Math.max(0, 180 - serverTime));
+          setTimeLeft(remainingTime);
+        } catch (error) {
+          console.error("Failed to fetch game state for timer:", error);
+        }
+      };
 
-    // Mettre à jour immédiatement
-    updateTimer();
+      // Mettre à jour immédiatement
+      updateTimer();
 
-    // Poller toutes les 100ms pour une mise à jour fluide
-    const interval = setInterval(updateTimer, 100);
+      // Poller toutes les 100ms pour une mise à jour fluide
+      const interval = setInterval(updateTimer, 100);
 
-    return () => clearInterval(interval);
-  }, [gameId]);
+      return () => clearInterval(interval);
+    }
+  }, [gameId, gameTime, isOnlineMode]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

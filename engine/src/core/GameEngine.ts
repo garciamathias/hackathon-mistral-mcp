@@ -1,17 +1,33 @@
 import { v4 as uuidv4 } from 'uuid';
 import { TroopData, TroopType, TroopState, TROOP_CONFIGS, Position } from '@shared/troop';
-import { TowerData, TowerType, TOWER_CONFIGS, TOWER_POSITIONS } from '@shared/tower';
+import { TowerData, TowerType, TOWER_POSITIONS } from '@shared/tower';
 import { GameSnapshot, GameStatus, PlayerState } from '@shared/game';
 import { GAME_CONSTANTS } from '@config/constants';
+import { GiantEntity } from '../entities/troops/Giant';
+import { TowerEntity } from '../entities/towers/TowerEntity';
+
+// Import other troop entities when they are created
+// import { BabyDragonEntity } from '../entities/troops/BabyDragon';
+// import { MiniPekkaEntity } from '../entities/troops/MiniPekka';
+// import { ValkyrieEntity } from '../entities/troops/Valkyrie';
+
+export interface TroopEntity {
+  data: TroopData;
+  update(deltaTime: number, towers: TowerData[], flaggedCells: Set<string>, gameEngine?: GameEngine): void;
+  takeDamage(damage: number): void;
+}
 
 export class GameEngine {
-  private troops: Map<string, TroopData> = new Map();
-  private towers: Map<string, TowerData> = new Map();
-  private players: Map<string, PlayerState> = new Map();
-  private gameStatus: GameStatus = GameStatus.WAITING;
-  private gameStartTime: number = 0;
-  private currentTick: number = 0;
-  private winner?: 'red' | 'blue' | 'draw';
+  protected troops: Map<string, TroopEntity> = new Map();
+  protected towers: Map<string, TowerEntity> = new Map();
+  protected players: Map<string, PlayerState> = new Map();
+  protected gameStatus: GameStatus = GameStatus.WAITING;
+  protected gameStartTime: number = 0;
+  protected currentTick: number = 0;
+  protected winner?: 'red' | 'blue' | 'draw';
+  protected flaggedCells: Set<string> = new Set();
+  protected onUpdateCallback?: (troops: TroopData[]) => void;
+  protected onGameEndCallback?: (winner: 'red' | 'blue') => void;
 
   constructor() {
     this.initializeTowers();
@@ -30,21 +46,7 @@ export class GameEngine {
   }
 
   private createTower(id: string, type: TowerType, team: 'red' | 'blue', position: Position): void {
-    const config = TOWER_CONFIGS[type];
-    const tower: TowerData = {
-      id,
-      type,
-      team,
-      position,
-      health: config.maxHealth,
-      maxHealth: config.maxHealth,
-      isAlive: true,
-      active: type === TowerType.PRINCESS, // Princess towers start active
-      damage: config.damage,
-      attackSpeed: config.attackSpeed,
-      range: config.range,
-      lastAttackTime: 0
-    };
+    const tower = new TowerEntity(id, type, team, position);
     this.towers.set(id, tower);
   }
 
@@ -58,6 +60,33 @@ export class GameEngine {
     this.currentTick = 0;
   }
 
+  public pause(): void {
+    // For compatibility with frontend
+    this.gameStatus = GameStatus.PAUSED;
+  }
+
+  public resume(): void {
+    if (this.gameStatus === GameStatus.PAUSED) {
+      this.gameStatus = GameStatus.IN_PROGRESS;
+    }
+  }
+
+  public stop(): void {
+    this.gameStatus = GameStatus.ENDED;
+    this.troops.clear();
+  }
+
+  public reset(): void {
+    this.troops.clear();
+    this.towers.clear();
+    this.players.clear();
+    this.gameStatus = GameStatus.WAITING;
+    this.gameStartTime = 0;
+    this.currentTick = 0;
+    this.winner = undefined;
+    this.initializeTowers();
+  }
+
   public update(deltaTime: number, tick: number): void {
     if (this.gameStatus !== GameStatus.IN_PROGRESS) {
       return;
@@ -68,14 +97,27 @@ export class GameEngine {
     // Update elixir for all players
     this.updateElixir(deltaTime);
 
-    // Update all troops
-    this.updateTroops(deltaTime);
+    // Clean up dead troops
+    this.cleanupDeadTroops();
+
+    // Get active towers
+    const activeTowers = this.getActiveTowers();
+
+    // Update all troops with entities
+    for (const troopEntity of this.troops.values()) {
+      troopEntity.update(deltaTime / 1000, activeTowers, this.flaggedCells, this);
+    }
 
     // Update tower attacks
     this.updateTowers(deltaTime);
 
     // Check win conditions
     this.checkWinConditions();
+
+    // Notify callbacks
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback(this.getAllTroops());
+    }
   }
 
   private updateElixir(deltaTime: number): void {
@@ -88,230 +130,42 @@ export class GameEngine {
     }
   }
 
-  private updateTroops(deltaTime: number): void {
-    for (const troop of this.troops.values()) {
-      if (!troop.isAlive) continue;
-
-      switch (troop.state) {
-        case TroopState.SPAWNING:
-          this.handleTroopSpawning(troop, deltaTime);
-          break;
-        case TroopState.MOVING_TO_BRIDGE:
-          this.handleTroopMovement(troop, deltaTime);
-          break;
-        case TroopState.TARGETING_TOWER:
-          this.handleTroopTargeting(troop, deltaTime);
-          break;
-        case TroopState.ATTACKING_TOWER:
-          this.handleTroopAttacking(troop, deltaTime);
-          break;
-      }
-    }
-  }
-
-  private handleTroopSpawning(troop: TroopData, deltaTime: number): void {
-    const timeSinceSpawn = Date.now() - troop.spawnTime;
-    if (timeSinceSpawn >= GAME_CONSTANTS.SPAWN.DEPLOY_TIME) {
-      troop.state = TroopState.MOVING_TO_BRIDGE;
-      // Set bridge target based on team
-      if (troop.team === 'red') {
-        troop.bridgeTarget = {
-          row: GAME_CONSTANTS.GRID.BRIDGE_ROW,
-          col: troop.col
-        };
-      } else {
-        troop.bridgeTarget = {
-          row: GAME_CONSTANTS.GRID.BRIDGE_ROW - 1,
-          col: troop.col
-        };
-      }
-      troop.targetPosition = troop.bridgeTarget;
-    }
-  }
-
-  private handleTroopMovement(troop: TroopData, deltaTime: number): void {
-    if (!troop.targetPosition) return;
-
-    const distance = this.calculateDistance(troop.position, troop.targetPosition);
-    if (distance < 0.1) {
-      // Reached target
-      troop.position = { ...troop.targetPosition };
-      troop.row = troop.targetPosition.row;
-      troop.col = troop.targetPosition.col;
-
-      // Check if reached bridge, then target nearest tower
-      if (troop.state === TroopState.MOVING_TO_BRIDGE) {
-        this.findNearestTower(troop);
-      }
-    } else {
-      // Move towards target
-      const moveDistance = (troop.speed * deltaTime) / 1000;
-      const ratio = Math.min(moveDistance / distance, 1);
-
-      troop.position.row += (troop.targetPosition.row - troop.position.row) * ratio;
-      troop.position.col += (troop.targetPosition.col - troop.position.col) * ratio;
-      troop.row = Math.round(troop.position.row);
-      troop.col = Math.round(troop.position.col);
-    }
-  }
-
-  private handleTroopTargeting(troop: TroopData, deltaTime: number): void {
-    if (!troop.towerTarget) {
-      this.findNearestTower(troop);
-      return;
-    }
-
-    const tower = this.towers.get(troop.towerTarget);
-    if (!tower || !tower.isAlive) {
-      this.findNearestTower(troop);
-      return;
-    }
-
-    const distance = this.calculateDistance(troop.position, tower.position);
-    const config = TROOP_CONFIGS[troop.type];
-
-    if (distance <= config.range) {
-      troop.state = TroopState.ATTACKING_TOWER;
-      troop.isInCombat = true;
-    } else {
-      troop.targetPosition = tower.position;
-      this.handleTroopMovement(troop, deltaTime);
-    }
-  }
-
-  private handleTroopAttacking(troop: TroopData, deltaTime: number): void {
-    if (!troop.towerTarget) {
-      troop.state = TroopState.TARGETING_TOWER;
-      troop.isInCombat = false;
-      return;
-    }
-
-    const tower = this.towers.get(troop.towerTarget);
-    if (!tower || !tower.isAlive) {
-      troop.state = TroopState.TARGETING_TOWER;
-      troop.isInCombat = false;
-      this.findNearestTower(troop);
-      return;
-    }
-
-    const now = Date.now();
-    const attackInterval = 1000 / troop.attackSpeed;
-
-    if (now - troop.lastAttackTime >= attackInterval) {
-      this.dealDamageToTower(tower, troop.attackDamage);
-      troop.lastAttackTime = now;
-    }
-  }
-
   private updateTowers(deltaTime: number): void {
-    for (const tower of this.towers.values()) {
-      if (!tower.isAlive || !tower.active) continue;
-
-      // Find nearest enemy troop
-      const nearestTroop = this.findNearestTroopForTower(tower);
-      if (!nearestTroop) continue;
-
-      const distance = this.calculateDistance(tower.position, nearestTroop.position);
-      if (distance > tower.range) continue;
-
-      const now = Date.now();
-      const attackInterval = 1000 / tower.attackSpeed;
-
-      if (now - tower.lastAttackTime >= attackInterval) {
-        this.dealDamageToTroop(nearestTroop, tower.damage);
-        tower.lastAttackTime = now;
-      }
-    }
-  }
-
-  private findNearestTower(troop: TroopData): void {
-    let nearestTower: TowerData | null = null;
-    let minDistance = Infinity;
+    const allTroops = this.getAllTroops();
+    const allTowers = this.getActiveTowers();
 
     for (const tower of this.towers.values()) {
-      if (tower.team === troop.team || !tower.isAlive) continue;
-
-      const distance = this.calculateDistance(troop.position, tower.position);
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestTower = tower;
-      }
-    }
-
-    if (nearestTower) {
-      troop.towerTarget = nearestTower.id;
-      troop.targetPosition = nearestTower.position;
-      troop.state = TroopState.TARGETING_TOWER;
+      // Update the tower (find targets and attack)
+      tower.update(deltaTime / 1000, allTroops, allTowers, this);
     }
   }
 
-  private findNearestTroopForTower(tower: TowerData): TroopData | null {
-    let nearestTroop: TroopData | null = null;
-    let minDistance = Infinity;
-
-    for (const troop of this.troops.values()) {
-      if (troop.team === tower.team || !troop.isAlive) continue;
-
-      const distance = this.calculateDistance(tower.position, troop.position);
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestTroop = troop;
-      }
-    }
-
-    return nearestTroop;
-  }
-
-  private dealDamageToTower(tower: TowerData, damage: number): void {
-    tower.health -= damage;
-    if (tower.health <= 0) {
-      tower.health = 0;
-      tower.isAlive = false;
-      tower.active = false;
-
-      // Activate king tower if princess tower is destroyed
-      if (tower.type === TowerType.PRINCESS) {
-        const kingTower = this.getKingTower(tower.team);
-        if (kingTower) {
-          kingTower.active = true;
+  private cleanupDeadTroops(): void {
+    const deadTroops = Array.from(this.troops.entries())
+      .filter(([, troop]) => {
+        if (!troop || !troop.data) {
+          console.warn('Troop missing data property:', troop);
+          return false;
         }
-      }
+        return !troop.data.isAlive;
+      })
+      .map(([id,]) => id);
+
+    for (const id of deadTroops) {
+      this.troops.delete(id);
     }
-  }
-
-  private dealDamageToTroop(troop: TroopData, damage: number): void {
-    troop.health -= damage;
-    if (troop.health <= 0) {
-      troop.health = 0;
-      troop.isAlive = false;
-      troop.state = TroopState.DEAD;
-    }
-  }
-
-  private getKingTower(team: 'red' | 'blue'): TowerData | null {
-    const kingId = team === 'red' ? 'red_king' : 'blue_king';
-    return this.towers.get(kingId) || null;
-  }
-
-  private calculateDistance(pos1: Position, pos2: Position): number {
-    const dx = pos2.col - pos1.col;
-    const dy = pos2.row - pos1.row;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 
   private checkWinConditions(): void {
     const redKing = this.towers.get('red_king');
     const blueKing = this.towers.get('blue_king');
 
-    if (!redKing?.isAlive && !blueKing?.isAlive) {
-      this.winner = 'draw';
-      this.gameStatus = GameStatus.ENDED;
-    } else if (!redKing?.isAlive) {
-      this.winner = 'blue';
-      this.gameStatus = GameStatus.ENDED;
-    } else if (!blueKing?.isAlive) {
-      this.winner = 'red';
-      this.gameStatus = GameStatus.ENDED;
+    if (redKing && redKing.data && !redKing.data.isAlive) {
+      console.log('Game Over: Blue team wins! King Red destroyed');
+      this.endGame('blue');
+    } else if (blueKing && blueKing.data && !blueKing.data.isAlive) {
+      console.log('Game Over: Red team wins! King Blue destroyed');
+      this.endGame('red');
     }
 
     // Check for time limit
@@ -321,13 +175,22 @@ export class GameEngine {
     }
   }
 
+  private endGame(winner: 'red' | 'blue'): void {
+    this.gameStatus = GameStatus.ENDED;
+    this.winner = winner;
+
+    if (this.onGameEndCallback) {
+      this.onGameEndCallback(winner);
+    }
+  }
+
   private determineWinnerByCrowns(): void {
     let redCrowns = 0;
     let blueCrowns = 0;
 
     for (const tower of this.towers.values()) {
-      if (!tower.isAlive) {
-        if (tower.team === 'red') {
+      if (!tower.data.isAlive) {
+        if (tower.data.team === 'red') {
           blueCrowns++;
         } else {
           redCrowns++;
@@ -346,35 +209,314 @@ export class GameEngine {
     this.gameStatus = GameStatus.ENDED;
   }
 
+  // Spawn troop with entity
   public spawnTroop(type: TroopType, team: 'red' | 'blue', row: number, col: number): TroopData {
-    const config = TROOP_CONFIGS[type];
     const id = uuidv4();
+    let troopEntity: TroopEntity;
 
-    const troop: TroopData = {
-      id,
-      type,
-      team,
-      position: { row, col },
-      targetPosition: { row, col },
-      state: TroopState.SPAWNING,
-      health: config.maxHealth,
-      maxHealth: config.maxHealth,
-      speed: config.speed,
-      isAlive: true,
-      isInCombat: false,
-      attackDamage: config.attackDamage,
-      attackSpeed: config.attackSpeed,
-      lastAttackTime: 0,
-      focusOnBuildings: config.focusOnBuildings,
-      flying: config.flying,
-      row,
-      col,
-      spawnTime: Date.now(),
-      lastUpdateTime: Date.now()
-    };
+    switch (type) {
+      case TroopType.GIANT:
+        troopEntity = new GiantEntity(id, team, { row, col });
+        break;
+      // Add other troop types when entities are created
+      // case TroopType.BABY_DRAGON:
+      //   troopEntity = new BabyDragonEntity(id, team, { row, col });
+      //   break;
+      // case TroopType.MINI_PEKKA:
+      //   troopEntity = new MiniPekkaEntity(id, team, { row, col });
+      //   break;
+      // case TroopType.VALKYRIE:
+      //   troopEntity = new ValkyrieEntity(id, team, { row, col });
+      //   break;
+      default:
+        // Fallback to creating simple troop data for now
+        const config = TROOP_CONFIGS[type];
+        const troopData: TroopData = {
+          id,
+          type,
+          team,
+          position: { row, col },
+          targetPosition: { row, col },
+          state: TroopState.SPAWNING,
+          health: config.maxHealth,
+          maxHealth: config.maxHealth,
+          speed: config.speed,
+          isAlive: true,
+          isInCombat: false,
+          attackDamage: config.attackDamage,
+          attackSpeed: config.attackSpeed,
+          lastAttackTime: 0, // Start at 0 to allow immediate first attack
+          focusOnBuildings: config.focusOnBuildings,
+          flying: config.flying,
+          row,
+          col,
+          spawnTime: Date.now(),
+          lastUpdateTime: Date.now()
+        };
 
-    this.troops.set(id, troop);
-    return troop;
+        // Create a simple entity wrapper with actual movement logic
+        troopEntity = {
+          data: troopData,
+          update: (deltaTime: number, towers: any[], flaggedCells: Set<string>, gameEngine: any) => {
+            // Skip if dead
+            if (!troopData.isAlive || troopData.state === TroopState.DEAD) return;
+
+            // Handle spawning state - immediate transition like local engine
+            if (troopData.state === TroopState.SPAWNING) {
+              // Determine if bridge is needed based on position
+              const frontierRow = 16;
+              let needsBridge = false;
+
+              if (troopData.team === 'blue') {
+                // Blue targets red towers (up) - needs bridge if spawn below frontier
+                needsBridge = troopData.position.row > frontierRow;
+              } else {
+                // Red targets blue towers (down) - needs bridge if spawn above frontier
+                needsBridge = troopData.position.row < frontierRow;
+              }
+
+              if (needsBridge) {
+                troopData.state = TroopState.MOVING_TO_BRIDGE;
+              } else {
+                troopData.state = TroopState.TARGETING_TOWER;
+              }
+              return;
+            }
+
+            // Bridge positions (matching local engine)
+            const bridges = [
+              { row: 16, col: 3 },
+              { row: 16, col: 14 }
+            ];
+
+            // Choose closest bridge
+            let closestBridge = bridges[0];
+            let closestDist = Math.sqrt(
+              Math.pow(bridges[0].row - troopData.position.row, 2) +
+              Math.pow(bridges[0].col - troopData.position.col, 2)
+            );
+
+            for (const bridge of bridges) {
+              const dist = Math.sqrt(
+                Math.pow(bridge.row - troopData.position.row, 2) +
+                Math.pow(bridge.col - troopData.position.col, 2)
+              );
+              if (dist < closestDist) {
+                closestDist = dist;
+                closestBridge = bridge;
+              }
+            }
+
+            const bridgeRow = closestBridge.row;
+            const bridgeCol = closestBridge.col;
+
+            // Move to bridge first
+            if (troopData.state === TroopState.MOVING_TO_BRIDGE) {
+              const distToBridge = Math.abs(troopData.position.row - bridgeRow);
+              if (distToBridge < 1) {
+                troopData.state = TroopState.TARGETING_TOWER;
+              } else {
+                // Move towards bridge
+                const direction = troopData.team === 'red' ? 1 : -1;
+                const moveDistance = troopData.speed * deltaTime;
+                troopData.position.row += direction * moveDistance;
+                troopData.row = troopData.position.row;
+
+                // Move horizontally towards center if needed
+                const colDiff = bridgeCol - troopData.position.col;
+                if (Math.abs(colDiff) > 0.5) {
+                  const colMove = Math.sign(colDiff) * Math.min(moveDistance, Math.abs(colDiff));
+                  troopData.position.col += colMove;
+                  troopData.col = troopData.position.col;
+                }
+              }
+            }
+
+            // Target and move to nearest enemy tower
+            if (troopData.state === TroopState.TARGETING_TOWER || troopData.state === TroopState.ATTACKING_TOWER) {
+              // Find closest enemy tower
+              const enemyTowers = towers.filter(t => t.team !== troopData.team && t.isAlive);
+              if (enemyTowers.length === 0) {
+                troopData.state = TroopState.DEAD;
+                troopData.isAlive = false;
+                return;
+              }
+
+              let closestTower = enemyTowers[0];
+              let closestDist = Math.sqrt(
+                Math.pow(closestTower.position.row - troopData.position.row, 2) +
+                Math.pow(closestTower.position.col - troopData.position.col, 2)
+              );
+
+              for (const tower of enemyTowers) {
+                const dist = Math.sqrt(
+                  Math.pow(tower.position.row - troopData.position.row, 2) +
+                  Math.pow(tower.position.col - troopData.position.col, 2)
+                );
+                if (dist < closestDist) {
+                  closestDist = dist;
+                  closestTower = tower;
+                }
+              }
+
+              troopData.towerTarget = closestTower.id;
+              troopData.targetPosition = closestTower.position;
+
+              // Check if in attack range
+              const attackRange = config.range || 1.2;
+              if (closestDist <= attackRange) {
+                troopData.state = TroopState.ATTACKING_TOWER;
+                troopData.isInCombat = true;
+
+                // Attack if cooldown is ready (attackSpeed is attacks per second)
+                const now = Date.now() / 1000; // Convert to seconds
+                const attackCooldown = 1 / troopData.attackSpeed; // Time between attacks in seconds
+                if (troopData.lastAttackTime === 0 || now - troopData.lastAttackTime >= attackCooldown) {
+                  // Deal damage to tower
+                  const towerEntity = gameEngine.towers.get(closestTower.id);
+                  if (towerEntity) {
+                    towerEntity.takeDamage(troopData.attackDamage);
+                    troopData.lastAttackTime = now; // Store in seconds
+                    console.log(`Troop ${troopData.id} attacks tower ${closestTower.id} for ${troopData.attackDamage} damage`);
+                  }
+                }
+              } else {
+                // Move towards tower
+                troopData.state = TroopState.TARGETING_TOWER;
+                troopData.isInCombat = false;
+
+                const moveDistance = troopData.speed * deltaTime;
+                const dx = closestTower.position.col - troopData.position.col;
+                const dy = closestTower.position.row - troopData.position.row;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0) {
+                  const moveX = (dx / dist) * moveDistance;
+                  const moveY = (dy / dist) * moveDistance;
+
+                  troopData.position.col += moveX;
+                  troopData.position.row += moveY;
+                  troopData.col = troopData.position.col;
+                  troopData.row = troopData.position.row;
+                }
+              }
+            }
+
+            troopData.lastUpdateTime = Date.now();
+          },
+          takeDamage: (damage: number) => {
+            troopData.health -= damage;
+            if (troopData.health <= 0) {
+              troopData.health = 0;
+              troopData.isAlive = false;
+              troopData.state = TroopState.DEAD;
+            }
+          }
+        };
+    }
+
+    this.troops.set(id, troopEntity);
+    console.log(`${type} spawned: ${id} for team ${team} at (${row}, ${col})`);
+    return troopEntity.data;
+  }
+
+  // Method to find closest enemy (troop or tower)
+  public findClosestEnemy(troop: TroopData): { target: any, distance: number } | null {
+    const activeTowers = this.getActiveTowers();
+    const enemyTroops = this.getAllTroops().filter(t =>
+      t.team !== troop.team && t.isAlive
+    );
+
+    let closestTarget: any = null;
+    let closestDistance = Infinity;
+
+    // Check enemy towers (always accessible)
+    activeTowers.forEach(tower => {
+      if (tower.team !== troop.team) {
+        const distance = Math.sqrt(
+          Math.pow(tower.position.row - troop.position.row, 2) +
+          Math.pow(tower.position.col - troop.position.col, 2)
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestTarget = { ...tower, type: 'tower' };
+        }
+      }
+    });
+
+    // Check enemy troops (with flying vs non-flying restriction and river side)
+    enemyTroops.forEach(enemyTroop => {
+      // Non-flying troops cannot target flying troops
+      if (!troop.flying && enemyTroop.flying) {
+        return;
+      }
+
+      // For non-flying troops, check they are on same side of river
+      if (!troop.flying) {
+        const frontierRow = 16;
+        const troopSide = troop.position.row <= frontierRow ? 'top' : 'bottom';
+        const enemySide = enemyTroop.position.row <= frontierRow ? 'top' : 'bottom';
+
+        if (troopSide !== enemySide) {
+          return;
+        }
+      }
+
+      const distance = Math.sqrt(
+        Math.pow(enemyTroop.position.row - troop.position.row, 2) +
+        Math.pow(enemyTroop.position.col - troop.position.col, 2)
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestTarget = { ...enemyTroop, type: 'troop' };
+      }
+    });
+
+    return closestTarget ? { target: closestTarget, distance: closestDistance } : null;
+  }
+
+  public dealDamageToTower(towerId: string, damage: number): void {
+    const tower = this.towers.get(towerId);
+    if (tower) {
+      tower.takeDamage(damage);
+
+      // Activate king tower if princess tower is destroyed
+      if (!tower.data.isAlive && tower.data.type === TowerType.PRINCESS) {
+        const kingTowerId = tower.data.team === 'red' ? 'red_king' : 'blue_king';
+        const kingTower = this.towers.get(kingTowerId);
+        if (kingTower) {
+          kingTower.data.active = true;
+          console.log(`King tower ${kingTowerId} activated after princess tower destruction`);
+        }
+      }
+    }
+  }
+
+  public dealDamageToTroop(troopId: string, damage: number): void {
+    const troopEntity = this.troops.get(troopId);
+    if (troopEntity) {
+      troopEntity.takeDamage(damage);
+    }
+  }
+
+  public getTowerEntity(id: string): TowerEntity | undefined {
+    return this.towers.get(id);
+  }
+
+  public getTroopEntity(id: string): TroopEntity | undefined {
+    return this.troops.get(id);
+  }
+
+  public getAllTroops(): TroopData[] {
+    return Array.from(this.troops.values()).map(troopEntity => troopEntity.data);
+  }
+
+  public getAllTowers(): TowerData[] {
+    return Array.from(this.towers.values()).map(tower => tower.data);
+  }
+
+  public getActiveTowers(): TowerData[] {
+    return this.getAllTowers().filter(tower => tower.active && tower.isAlive);
   }
 
   public addPlayer(playerId: string, name: string, team: 'red' | 'blue'): void {
@@ -435,6 +577,18 @@ export class GameEngine {
     }
   }
 
+  public connectFlaggedCells(flaggedCells: Set<string>): void {
+    this.flaggedCells = flaggedCells;
+  }
+
+  public setOnUpdateCallback(callback: (troops: TroopData[]) => void): void {
+    this.onUpdateCallback = callback;
+  }
+
+  public setOnGameEndCallback(callback: (winner: 'red' | 'blue') => void): void {
+    this.onGameEndCallback = callback;
+  }
+
   public getSnapshot(): GameSnapshot {
     const gameTime = this.gameStatus === GameStatus.IN_PROGRESS
       ? (Date.now() - this.gameStartTime) / 1000
@@ -445,8 +599,8 @@ export class GameEngine {
       tick: this.currentTick,
       status: this.gameStatus,
       gameTime,
-      troops: Array.from(this.troops.values()),
-      towers: Array.from(this.towers.values()),
+      troops: Array.from(this.troops.values()).map(t => t.data),
+      towers: Array.from(this.towers.values()).map(t => t.data),
       players: Array.from(this.players.values()),
       winner: this.winner
     };
@@ -457,25 +611,30 @@ export class GameEngine {
   }
 
   public getTroops(): TroopData[] {
-    return Array.from(this.troops.values());
+    return this.getAllTroops();
   }
 
   public getTowers(): TowerData[] {
-    return Array.from(this.towers.values());
+    return this.getAllTowers();
   }
 
   public getPlayers(): PlayerState[] {
     return Array.from(this.players.values());
   }
 
-  public reset(): void {
-    this.troops.clear();
-    this.towers.clear();
-    this.players.clear();
-    this.gameStatus = GameStatus.WAITING;
-    this.gameStartTime = 0;
-    this.currentTick = 0;
-    this.winner = undefined;
-    this.initializeTowers();
+  // Utility methods for statistics
+  public getGameStats() {
+    const allTroops = this.getAllTroops();
+    const livingTroops = allTroops.filter(t => t.isAlive);
+
+    return {
+      totalTroops: allTroops.length,
+      livingTroops: livingTroops.length,
+      redTroops: allTroops.filter(t => t.team === 'red').length,
+      blueTroops: allTroops.filter(t => t.team === 'blue').length,
+      gameTime: (Date.now() - this.gameStartTime) / 1000,
+      isRunning: this.gameStatus === GameStatus.IN_PROGRESS,
+      isPaused: this.gameStatus === GameStatus.PAUSED
+    };
   }
 }

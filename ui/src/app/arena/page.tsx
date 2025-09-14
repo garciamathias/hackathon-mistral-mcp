@@ -12,6 +12,7 @@ import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 import { GameStatus } from "@/types/backend";
+import { GameState } from "@/game/GameEngine";
 
 function ArenaContent() {
   const searchParams = useSearchParams();
@@ -27,7 +28,6 @@ function ArenaContent() {
 
   const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
   const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
-  const router = useRouter();
   const params = useSearchParams();
   const gameId = params.get("game_id");
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -83,7 +83,10 @@ function ArenaContent() {
     active: true,
     position: { row: tower.row, col: tower.col },
     offsetX: tower.offsetX,
-    offsetY: tower.offsetY
+    offsetY: tower.offsetY,
+    lastAttackTime: 0,
+    isAttacking: false,
+    canAttack: true
   }));
   
   // Local game hook
@@ -172,32 +175,53 @@ function ArenaContent() {
   const gameEnded = isOnlineMode ? onlineGame.gameEnded : localGame.gameEnded;
   const winner = isOnlineMode ? onlineGame.winner : localGame.winner;
 
-  // Fonction pour obtenir toutes les cellules marquées des tours actives
-  const getActiveTowersFlaggedCells = React.useCallback(() => {
-    const flaggedCells = new Set<string>();
+  // Fetch game state for local mode only
+  React.useEffect(() => {
+    if (!isOnlineMode && gameId) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data || data.error) return;
+          setGameState(data);
+        } catch (error) {
+          console.error("Failed to fetch game state:", error);
+        }
+      }, 500);
 
-    
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data || data.error) return;
-        setGameState(data);
-      } catch (error) {
-        console.error("Failed to fetch game state:", error);
-      }
-    }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [gameId, isOnlineMode]);
 
-    return () => clearInterval(interval);
-  }, [gameId]);
+  // Sync currentTeam with player's actual team in online mode
+  React.useEffect(() => {
+    if (isOnlineMode && onlineGame.playerTeam) {
+      setCurrentTeam(onlineGame.playerTeam);
+    }
+  }, [isOnlineMode, onlineGame.playerTeam]);
 
-  const handleCardDragStart = (troopType: TroopType) => setDraggedCard({ troopType, team: currentTeam });
+  const handleCardDragStart = (troopType: TroopType) => {
+    // In online mode, always use the player's actual team
+    const team = isOnlineMode && onlineGame.playerTeam ? onlineGame.playerTeam : currentTeam;
+    setDraggedCard({ troopType, team });
+  };
   const handleCardDragEnd = () => setDraggedCard(null);
   
   const handleCellDrop = async (row: number, col: number, e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedCard && gameId) {
+    if (!draggedCard) return;
+
+    if (isOnlineMode) {
+      // Online mode: Use onlineGame to spawn troops
+      if (onlineGame.playerTeam && draggedCard.team === onlineGame.playerTeam) {
+        onlineGame.playCard(draggedCard.troopType, row, col);
+        setDraggedCard(null);
+      } else {
+        console.warn("Cannot spawn troops for enemy team");
+      }
+    } else if (gameId) {
+      // Local mode: Use API endpoint
       try {
         await fetch("/api/game/spawn", {
           method: "POST",
@@ -220,17 +244,20 @@ function ArenaContent() {
   const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
 
   const normalizeType = (s: any): TroopType | null => {
-    const u = String(s || "").toUpperCase();
-    if (u === "GIANT" || u === "BABY_DRAGON" || u === "MINI_PEKKA" || u === "VALKYRIE") return u as TroopType;
+    const u = String(s || "").toLowerCase();
+    if (u === "giant") return TroopType.GIANT;
+    if (u === "babydragon" || u === "baby_dragon") return TroopType.BABY_DRAGON;
+    if (u === "minipekka" || u === "mini_pekka") return TroopType.MINI_PEKKA;
+    if (u === "valkyrie") return TroopType.VALKYRIE;
     console.warn("Unknown troop.type from API:", s);
     return null;
   };
 
   const FALLBACK_WALK: Record<TroopType, {player: string; opponent: string}> = {
-    GIANT: { player: "/images/troops/giant/Giant_walk_player.gif", opponent: "/images/troops/giant/Giant_walk_opponent.gif" },
-    BABY_DRAGON: { player: "/images/troops/babydragon/BabyDragon_walk_player.gif", opponent: "/images/troops/babydragon/BabyDragon_walk_opponent.gif" },
-    MINI_PEKKA: { player: "/images/troops/minipekka/MiniPekka_walk_player.gif", opponent: "/images/troops/minipekka/MiniPekka_walk_opponent.gif" },
-    VALKYRIE: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
+    [TroopType.GIANT]: { player: "/images/troops/giant/Giant_walk_player.gif", opponent: "/images/troops/giant/Giant_walk_opponent.gif" },
+    [TroopType.BABY_DRAGON]: { player: "/images/troops/babydragon/BabyDragon_walk_player.gif", opponent: "/images/troops/babydragon/BabyDragon_walk_opponent.gif" },
+    [TroopType.MINI_PEKKA]: { player: "/images/troops/minipekka/MiniPekka_walk_player.gif", opponent: "/images/troops/minipekka/MiniPekka_walk_opponent.gif" },
+    [TroopType.VALKYRIE]: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
   };
 
   const getTroopGifPath = (troop: any) => {
@@ -249,17 +276,54 @@ function ArenaContent() {
     router.push("/");
   };
 
-  if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
-  if (!gameState) return <div>Loading game...</div>;
+  // Conditional rendering based on mode
+  if (isOnlineMode) {
+    if (isConnecting) {
+      return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Connecting to match...</div>;
+    }
+    if (!onlineGame.isConnected && !isConnecting) {
+      return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Connection failed. Redirecting...</div>;
+    }
+    // Check if game is waiting for players
+    if (onlineGame.gameStatus === GameStatus.WAITING) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Waiting for opponent...</h2>
+            <p className="text-gray-400">Match ID: {onlineGame.matchId}</p>
+            <p className="text-gray-400 mt-2">Players: {onlineGame.players.length}/2</p>
+            <div className="mt-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } else {
+    // Local mode checks
+    if (!gameId) return null;
+    if (!gameState) return <div>Loading game...</div>;
+  }
 
-  // Debug: log les troupes reçues
-  console.log("TROUPES REÇUES:", gameState?.troops);
+  // Get game data based on mode
+  const gameTroops = isOnlineMode ? troops : (gameState?.troops ?? []);
+  const gameTowers = isOnlineMode ?
+    Object.values(TOWER).reduce((acc, tower) => {
+      const engineTower = gameEngineTowers.find(t => t.id === tower.id);
+      return {
+        ...acc,
+        [tower.id]: engineTower || { health: tower.type === 'king' ? 4824 : 3052, max_health: tower.type === 'king' ? 4824 : 3052 }
+      };
+    }, {} as any) :
+    gameState?.towers;
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
       <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
 
-      {gameState.is_game_over && gameState.winner && <GameEndScreen winner={gameState.winner as "red" | "blue"} onRestart={handleRestart} />}
+      {(isOnlineMode ? gameEnded : gameState?.is_game_over) &&
+       (isOnlineMode ? winner : gameState?.winner) &&
+       <GameEndScreen winner={(isOnlineMode ? winner : gameState.winner) as "red" | "blue"} onRestart={handleRestart} />}
 
       <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
         <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
@@ -290,12 +354,12 @@ function ArenaContent() {
                   onDragOver={handleCellDragOver}
                 >
                   {/* Debug overlay minimal */}
-                  {(gameState.troops ?? []).some(t => Math.floor(t.position.row) === row && Math.floor(t.position.col) === col) && (
+                  {gameTroops.some(t => Math.floor(t.position.row) === row && Math.floor(t.position.col) === col) && (
                     <div className="absolute inset-0 z-30 pointer-events-none ring-2 ring-green-300/60"></div>
                   )}
                   
                   {shouldShowTower && (() => {
-                    const engineTower = gameState.towers[tower!.id];
+                    const engineTower = gameTowers?.[tower!.id];
                     const dead = engineTower && engineTower.health <= 0;
                     if (dead) return null;
 
@@ -329,7 +393,7 @@ function ArenaContent() {
                     );
                   })()}
 
-                  {(gameState.troops ?? [])
+                  {gameTroops
                     .filter(t => {
                       const p = t?.position;
                       return p && Number.isFinite(p.row) && Number.isFinite(p.col)
@@ -373,11 +437,14 @@ function ArenaContent() {
         </div>
 
         <div className="absolute top-4 right-4 z-10">
-          <ClashTimer />
+          <ClashTimer
+            gameTime={isOnlineMode ? onlineGame.gameTime : undefined}
+            isOnlineMode={isOnlineMode}
+          />
         </div>
 
         {/* Debug: affichage temporaire de tous les troops */}
-        {(gameState.troops ?? []).map(t => (
+        {(gameState?.troops ?? []).map(t => (
           <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
             {t.type} {t.team} @ {t.position.row},{t.position.col}
           </div>
@@ -392,9 +459,9 @@ function ArenaContent() {
                 {/* Baby Dragon */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -404,9 +471,9 @@ function ArenaContent() {
                 {/* Mini PEKKA */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -416,9 +483,9 @@ function ArenaContent() {
                 {/* Giant */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.GIANT)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -428,9 +495,9 @@ function ArenaContent() {
                 {/* Valkyrie */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -440,7 +507,6 @@ function ArenaContent() {
             </div>
           </div>
         </div>
-      </div>
 
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">

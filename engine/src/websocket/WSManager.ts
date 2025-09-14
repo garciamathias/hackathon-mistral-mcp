@@ -63,7 +63,9 @@ export class WSManager {
     }
 
     room.addClient(client);
-    console.log(`Client ${client.id} joined room ${roomId}`);
+    const roomInfo = room.getRoomInfo();
+    console.log(`[WSManager] Client ${client.id} (player: ${playerId}) joined room ${roomId}`);
+    console.log(`[WSManager] Room status: ${roomInfo.status}, Players: ${roomInfo.playerCount}/${roomInfo.maxPlayers}`);
 
     // Setup message handlers
     ws.on('message', (data) => {
@@ -91,6 +93,7 @@ export class WSManager {
 
     // Send initial snapshot
     const snapshot = room.getSnapshot();
+    console.log(`[WSManager] Sending initial snapshot to client ${client.id} with game status: ${snapshot.status}`);
     this.sendSnapshot(ws, snapshot);
   }
 

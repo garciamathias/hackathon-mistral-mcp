@@ -49,6 +49,11 @@ export class GameRoom {
       this.onSnapshotCallback(snapshot);
     }
 
+    // Log status changes
+    if (tick % 50 === 0) { // Log every 5 seconds (50 ticks at 10Hz)
+      console.log(`[GameRoom] Room ${this.id} - Tick ${tick}, Status: ${snapshot.status}, Players: ${snapshot.players.length}, Game Time: ${snapshot.gameTime}s`);
+    }
+
     // Check for game end
     if (this.engine.getStatus() === GameStatus.ENDED) {
       this.handleGameEnd();
@@ -117,9 +122,21 @@ export class GameRoom {
     }
 
     // Start game if room is full
-    if (this.players.size === this.maxPlayers && this.engine.getStatus() === GameStatus.WAITING) {
-      console.log(`Starting game in room ${this.id}`);
-      this.startGame();
+    if (this.players.size === this.maxPlayers) {
+      const currentStatus = this.engine.getStatus();
+      console.log(`[GameRoom] Room ${this.id} is FULL. Current status: ${currentStatus}`);
+
+      if (currentStatus === GameStatus.WAITING) {
+        console.log(`[GameRoom] Starting game in room ${this.id} automatically!`);
+        console.log(`[GameRoom] Waiting 1.5 seconds for WebSocket connections to establish...`);
+        // Increased delay to ensure WebSocket connections are ready
+        setTimeout(() => {
+          console.log(`[GameRoom] Auto-start timer expired, attempting to start game...`);
+          this.startGame();
+        }, 1500); // Increased from 500ms to 1500ms
+      } else {
+        console.log(`[GameRoom] Game already started or ended. Status: ${currentStatus}`);
+      }
     }
 
     return playerState || null;
@@ -179,14 +196,45 @@ export class GameRoom {
   }
 
   public startGame(): void {
-    if (this.engine.getStatus() !== GameStatus.WAITING) {
+    const currentStatus = this.engine.getStatus();
+
+    if (currentStatus !== GameStatus.WAITING) {
+      console.log(`[GameRoom] Cannot start game in room ${this.id}. Current status: ${currentStatus}`);
       return;
     }
+
+    console.log(`[GameRoom] Starting game in room ${this.id}...`);
+    console.log(`[GameRoom] Connected clients: ${this.clients.size}`);
+    console.log(`[GameRoom] Player count: ${this.players.size}/${this.maxPlayers}`);
 
     this.engine.startGame();
     this.tickManager.start();
     this.gameStartedAt = Date.now();
-    console.log(`Game started in room ${this.id}`);
+
+    const newStatus = this.engine.getStatus();
+    console.log(`[GameRoom] ✅ Game STARTED in room ${this.id}!`);
+    console.log(`[GameRoom] Game status changed from ${currentStatus} to ${newStatus}`);
+    console.log(`[GameRoom] TickManager running: ${this.tickManager.isActive()}`);
+    console.log(`[GameRoom] Players:`, Array.from(this.players.values()).map(p => ({
+      id: p.id,
+      name: p.name,
+      team: p.team
+    })));
+
+    // Force immediate broadcast of game start to all connected clients
+    const snapshot = this.engine.getSnapshot();
+    console.log(`[GameRoom] Broadcasting initial game snapshot with status: ${snapshot.status}`);
+    if (this.onSnapshotCallback) {
+      this.onSnapshotCallback(snapshot);
+      // Double broadcast to ensure clients get the update
+      setTimeout(() => {
+        const secondSnapshot = this.engine.getSnapshot();
+        console.log(`[GameRoom] Second broadcast with status: ${secondSnapshot.status}`);
+        this.onSnapshotCallback!(secondSnapshot);
+      }, 100);
+    } else {
+      console.error(`[GameRoom] WARNING: No onSnapshotCallback registered!`);
+    }
   }
 
   public pauseGame(): void {
