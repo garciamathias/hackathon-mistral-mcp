@@ -58,7 +58,7 @@ export class MCPGameManager {
         message: 'Failed to create game room'
       };
     }
-
+ 
     session.currentMatchId = room.id;
     session.team = playerState.team;
 
