@@ -12,6 +12,14 @@ import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 import { GameStatus } from "@/types/backend";
+
+// Coûts d'élixir pour chaque troupe
+const TROOP_COSTS: Record<TroopType, number> = {
+  [TroopType.GIANT]: 5,
+  [TroopType.BABY_DRAGON]: 4,
+  [TroopType.MINI_PEKKA]: 3,
+  [TroopType.VALKYRIE]: 4,
+};
 // État renvoyé par l'API locale /api/game/[id]/state
 type BackendGameState = {
   troops: any[];
@@ -208,7 +216,21 @@ function ArenaContent() {
     }
   }, [isOnlineMode, onlineGame.playerTeam]);
 
+  // Fonction pour vérifier si on a assez d'élixir
+  const canAffordTroop = (troopType: TroopType): boolean => {
+    const cost = TROOP_COSTS[troopType];
+    const currentElixir = isOnlineMode 
+      ? onlineGame.playerElixir
+      : (gameState?.elixir?.red || 0);
+    return currentElixir >= cost;
+  };
+
   const handleCardDragStart = (troopType: TroopType) => {
+    // Vérifier si on a assez d'élixir
+    if (!canAffordTroop(troopType)) {
+      return; // Ne pas permettre le drag si pas assez d'élixir
+    }
+    
     // In online mode, always use the player's actual team
     const team = isOnlineMode && onlineGame.playerTeam ? onlineGame.playerTeam : currentTeam;
     setDraggedCard({ troopType, team });
@@ -499,6 +521,33 @@ function ArenaContent() {
           />
         </div>
 
+        {/* Affichage de l'élixir en bas à gauche */}
+         <div className="absolute bottom-[1.1%] left-[8.9%] z-15">
+           <div className="flex items-center space-x-3">
+             <span className="text-white supercell-font text-md font-bold">
+               {isOnlineMode 
+                 ? `${Math.floor(onlineGame.playerElixir)}`
+                 : `${gameState?.elixir?.red || 0}`
+               }
+             </span>
+             {/* Progress bar pour l'élixir */}
+              <div className="w-90 h-3 bg-black/50 rounded-full border border-purple-400/50 overflow-hidden">
+               <div 
+                 className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full transition-all duration-300 ease-out"
+                 style={{ 
+                   width: `${((isOnlineMode 
+                     ? onlineGame.playerElixir
+                     : gameState?.elixir?.red || 0
+                   ) / 10) * 100}%` 
+                 }}
+               >
+                 {/* Effet de brillance */}
+                 <div className="w-full h-full bg-gradient-to-t from-transparent via-white/20 to-transparent"></div>
+               </div>
+             </div>
+           </div>
+         </div>
+
         {/* Debug: affichage temporaire de tous les troops */}
         {(gameState?.troops ?? []).map(t => (
           <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
@@ -508,56 +557,80 @@ function ArenaContent() {
 
         {/* Barre de cartes */}
         <div className="fixed bottom-0 left-0 right-0 z-10">
-          <div className="flex justify-center items-end pb-4">
+          <div className="flex justify-center items-end">
             <div className="relative w-[80%] max-w-md">
               <img src="/images/cards/more/card_box.png" alt="Card Box" className="w-full h-44 object-fill rounded-t-lg" />
               <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
                 {/* Baby Dragon */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                    !isGameRunning || !canAffordTroop(TroopType.BABY_DRAGON) 
+                      ? 'opacity-50 cursor-not-allowed grayscale' 
+                      : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
                   }`}
-                  draggable={isGameRunning}
+                  draggable={isGameRunning && canAffordTroop(TroopType.BABY_DRAGON)}
                   onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
                   onDragEnd={handleCardDragEnd}
                 >
                   <img src="/images/cards/more/BabyDragonCard.png" alt={`${currentTeam} Baby Dragon`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                  {/* Coût d'élixir */}
+                  <div className="absolute top-2 -right-1 w-6 h-6 bg-purple-600 rounded-full border-2 border-white flex items-center justify-center z-20">
+                    <span className="text-white text-xs font-bold supercell-font">{TROOP_COSTS[TroopType.BABY_DRAGON]}</span>
+                  </div>
                 </div>
 
                 {/* Mini PEKKA */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                    !isGameRunning || !canAffordTroop(TroopType.MINI_PEKKA) 
+                      ? 'opacity-50 cursor-not-allowed grayscale' 
+                      : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
                   }`}
-                  draggable={isGameRunning}
+                  draggable={isGameRunning && canAffordTroop(TroopType.MINI_PEKKA)}
                   onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
                   onDragEnd={handleCardDragEnd}
                 >
                   <img src="/images/cards/more/MiniPEKKACard.png" alt={`${currentTeam} Mini PEKKA`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                  {/* Coût d'élixir */}
+                  <div className="absolute top-2 -right-1 w-6 h-6 bg-purple-600 rounded-full border-2 border-white flex items-center justify-center z-20">
+                    <span className="text-white text-xs font-bold supercell-font">{TROOP_COSTS[TroopType.MINI_PEKKA]}</span>
+                  </div>
                 </div>
 
                 {/* Giant */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                    !isGameRunning || !canAffordTroop(TroopType.GIANT) 
+                      ? 'opacity-50 cursor-not-allowed grayscale' 
+                      : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
                   }`}
-                  draggable={isGameRunning}
+                  draggable={isGameRunning && canAffordTroop(TroopType.GIANT)}
                   onDragStart={() => handleCardDragStart(TroopType.GIANT)}
                   onDragEnd={handleCardDragEnd}
                 >
                   <img src="/images/cards/more/GiantCard.png" alt={`${currentTeam} Giant`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                  {/* Coût d'élixir */}
+                  <div className="absolute top-2 -right-1 w-6 h-6 bg-purple-600 rounded-full border-2 border-white flex items-center justify-center z-20">
+                    <span className="text-white text-xs font-bold supercell-font">{TROOP_COSTS[TroopType.GIANT]}</span>
+                  </div>
                 </div>
 
                 {/* Valkyrie */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                    !isGameRunning || !canAffordTroop(TroopType.VALKYRIE) 
+                      ? 'opacity-50 cursor-not-allowed grayscale' 
+                      : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
                   }`}
-                  draggable={isGameRunning}
+                  draggable={isGameRunning && canAffordTroop(TroopType.VALKYRIE)}
                   onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
                   onDragEnd={handleCardDragEnd}
                 >
                   <img src="/images/cards/more/ValkyrieCard.png" alt={`${currentTeam} Valkyrie`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                  {/* Coût d'élixir */}
+                  <div className="absolute top-2 -right-1 w-6 h-6 bg-purple-600 rounded-full border-2 border-white flex items-center justify-center z-20">
+                    <span className="text-white text-xs font-bold supercell-font">{TROOP_COSTS[TroopType.VALKYRIE]}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -565,7 +638,7 @@ function ArenaContent() {
         </div>
 
         {/* Contrôles du jeu */}
-        <div className="absolute top-4 left-4 z-10 space-y-2">
+        <div className="absolute top-4 left-[-50%] z-10 space-y-2">
           {/* Online Mode Indicator */}
           {isOnlineMode && (
             <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-purple-500/30">
