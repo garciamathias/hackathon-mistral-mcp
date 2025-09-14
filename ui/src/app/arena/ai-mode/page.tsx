@@ -314,6 +314,15 @@ export default function AIArena() {
     }
   };
 
+  const getTroopScale = (troop: any) => {
+    const config = TROOP_CONFIGS[troop.type as TroopType];
+
+    if (typeof config.scale === 'object') {
+      return troop.isInCombat ? config.scale.fight : config.scale.walk;
+    }
+    return config.scale;
+  };
+
   // Drag and drop handlers
   const handleCardDragStart = (troopType: TroopType) => {
     setDraggedCard({ troopType, team: 'blue' }); // Player is always blue in AI mode
@@ -493,6 +502,7 @@ export default function AIArena() {
                     })
                     .map(troop => {
                       const gifPath = getTroopGifPath(troop);
+                      const scale = getTroopScale(troop);
                       const config = TROOP_CONFIGS[troop.type as TroopType];
 
                       console.log(`Rendering troop ${troop.id}:`, {
@@ -520,7 +530,7 @@ export default function AIArena() {
                             alt={`${troop.type} ${troop.team}`}
                             className="w-12 h-12 object-contain"
                             style={{
-                              transform: `scale(${config.scale || 1})`
+                              transform: `scale(${scale})`
                             }}
                           />
 

@@ -462,7 +462,11 @@ export default function Arena() {
                             alt={`${troop.type} ${troop.team}`}
                             className="w-12 h-12 object-contain"
                             style={{
-                              transform: `scale(${config.scale})`
+                              transform: `scale(${
+                                typeof config.scale === 'object' 
+                                  ? (troop.isInCombat ? config.scale.fight : config.scale.walk)
+                                  : config.scale
+                              })`
                             }}
                           />
                           

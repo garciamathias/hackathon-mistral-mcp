@@ -171,7 +171,10 @@ export const TROOP_CONFIGS: Record<TroopType, TroopConfig> = {
     },
     focusOnBuildings: false, // Cible le plus proche (troupe ou tour)
     flying: false,
-    scale: 2.2
+    scale: {
+      walk: 1.5,  // Scale 0.7 pour la marche
+      fight: 4.2  // Scale x3 de l'ancien 2.2 = 6.6 pour l'attaque
+    }
   }
 };
 
