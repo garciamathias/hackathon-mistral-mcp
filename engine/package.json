@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node -r ./tsconfig-paths-bootstrap.js dist/server.js",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts"
   },
