@@ -56,13 +56,13 @@ export default function Lobby() {
           Online Battle
         </h1>
 
-        <div className="mb-6">
+        <div className="mb-6 text-sm">
           <Input
             type="text"
             placeholder="Enter Match ID"
             value={matchId}
             onChange={(e) => setMatchId(e.target.value)}
-            className="bg-blue-950/80 border-2 border-blue-400 text-white text-lg rounded-lg supercell-font"
+            className="bg-blue-950/80 border-2 border-blue-400 text-white text-sm rounded-lg supercell-font"
           />
         </div>
 

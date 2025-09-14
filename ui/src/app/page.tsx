@@ -44,9 +44,9 @@ export default function Home() {
               {/* Mode Online */}
               <Button
                 onClick={handleOnlineCombat}
-                className="bg-gradient-to-r w-[85%] from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-11 px-4 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
+                className="bg-gradient-to-r w-[85%] from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-11 px-4 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300 supercell-font"
               >
-                🌐 Combat Online
+                Combat Online
               </Button>
             </div>
           </div>

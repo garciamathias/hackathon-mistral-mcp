@@ -308,18 +308,36 @@ function ArenaContent() {
     // Check if game is waiting for players
     if (onlineGame.gameStatus === GameStatus.WAITING) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-4">Waiting for opponent...</h2>
-            <p className="text-gray-400">Match ID: {onlineGame.matchId}</p>
-            <p className="text-gray-400 mt-2">Players: {onlineGame.players.length}/2</p>
-            <div className="mt-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+        <div
+          className="min-h-screen flex items-center justify-center p-6"
+          style={{
+            backgroundImage:
+              "linear-gradient(45deg, #1e3a8a 25%, transparent 25%), linear-gradient(-45deg, #1e3a8a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1e3a8a 75%), linear-gradient(-45deg, transparent 75%, #1e3a8a 75%)",
+            backgroundSize: "40px 40px",
+            backgroundColor: "#1e40af", // fond bleu foncé
+          }}
+        >
+          <div className="bg-gradient-to-b from-blue-700 to-blue-900 border-4 border-blue-400 rounded-xl shadow-2xl px-12 py-10 text-center max-w-md w-full">
+            <h2 className="text-3xl font-extrabold text-yellow-400 drop-shadow mb-6">
+              Waiting for Opponent...
+            </h2>
+    
+            <p className="text-blue-200 font-semibold mb-2">
+              Match ID: <span className="text-white">{onlineGame.matchId}</span>
+            </p>
+            <p className="text-blue-200 font-semibold mb-6">
+              Players:{" "}
+              <span className="text-white">{onlineGame.players.length}/2</span>
+            </p>
+    
+            <div className="flex justify-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-yellow-400 border-t-transparent"></div>
             </div>
           </div>
         </div>
       );
     }
+    
   } else {
     // Local mode checks
     if (!gameId) return null;
