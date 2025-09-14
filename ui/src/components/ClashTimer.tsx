@@ -1,26 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { serverEngine } from "@/game/ServerSyncEngine";
 
 export default function ClashTimer() {
   const [timeLeft, setTimeLeft] = useState(180); // 3:00 in seconds
-  const [isRunning, setIsRunning] = useState(true);
 
   useEffect(() => {
-    if (!isRunning || timeLeft <= 0) return;
+    // Utiliser le temps du serveur au lieu d'un timer local
+    const updateTimer = () => {
+      const gameStats = serverEngine.getGameStats();
+      const serverTime = gameStats.gameTime || 0;
+      
+      // Calculer le temps restant (180 secondes - temps écoulé)
+      const remainingTime = Math.round(Math.max(0, 180 - serverTime));
+      setTimeLeft(remainingTime);
+    };
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setIsRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Mettre à jour immédiatement
+    updateTimer();
 
-    return () => clearInterval(timer);
-  }, [isRunning, timeLeft]);
+    // Poller toutes les 100ms pour une mise à jour fluide
+    const interval = setInterval(updateTimer, 100);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

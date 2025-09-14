@@ -46,9 +46,46 @@ export class ServerSyncEngine extends GameEngine {
     this.onGameEndCallback = callback;
   }
 
+  // Override start method to use our own gameLoop without time increment
+  public start(): void {
+    if (this.gameState.isRunning) {
+      return;
+    }
+
+    this.gameState.isRunning = true;
+    this.gameState.lastUpdateTime = performance.now();
+    
+    // Use our custom gameLoop that doesn't increment time locally
+    this.serverGameLoop();
+  }
+
+  // Custom gameLoop that doesn't increment time locally
+  private serverGameLoop = () => {
+    if (!this.gameState.isRunning) {
+      return;
+    }
+
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.gameState.lastUpdateTime) / 1000; // Convert to seconds
+    
+    this.update(deltaTime);
+    
+    this.gameState.lastUpdateTime = currentTime;
+    // 🚀 Pas d'incrémentation locale du temps - on se fie au serveur
+    
+    // Utiliser setTimeout pour l'environnement serveur, requestAnimationFrame pour le client
+    if (typeof window !== 'undefined') {
+      (this as any).animationFrameId = requestAnimationFrame(this.serverGameLoop);
+    } else {
+      // Environnement serveur - utiliser setTimeout
+      setTimeout(() => {
+        this.serverGameLoop();
+      }, 16); // ~60 FPS
+    }
+  };
+
   // Override problematic methods from GameEngine
   protected cleanupDeadTroops(): void {
-    // Override to prevent errors - ServerSyncEngine manages troops differently
     // Don't delete troops locally, let server manage lifecycle
     // But we still need to mark them as dead locally
     const deadTroops = Array.from(this.troops.entries())
@@ -220,13 +257,25 @@ export class ServerSyncEngine extends GameEngine {
 
     // Update towers
     if (serverState.towers && typeof serverState.towers === 'object') {
-      Object.entries(serverState.towers).forEach(([towerId, towerData]) => {
-      const existingTower = this.towers.get(towerId);
-      if (existingTower) {
-        // Update health
-        (existingTower as any).health = towerData.health;
-        (existingTower as any).maxHealth = towerData.max_health;
-      }
+      Object.entries(serverState.towers).forEach(([towerId, towerData]: any) => {
+        const existingTower = this.getTowerEntity(towerId);
+        if (!existingTower) {
+          // créer la tour localement si absente
+          this.addTower(
+            towerData.id,
+            (towerData.type as 'king' | 'princess'),
+            (towerData.team as 'red' | 'blue'),
+            towerData.position.row,
+            towerData.position.col
+          );
+        }
+        const towerEnt = this.getTowerEntity(towerId);
+        if (towerEnt && towerEnt.data) {
+          (towerEnt.data as any).health = towerData.health;
+          (towerEnt.data as any).maxHealth = towerData.max_health;
+          (towerEnt.data as any).isAlive = towerData.health > 0;
+          (towerEnt.data as any).active = towerData.health > 0;
+        }
       });
     }
 
@@ -234,6 +283,12 @@ export class ServerSyncEngine extends GameEngine {
     if (serverState.is_game_over && serverState.winner) {
       this.handleGameEnd(serverState.winner as 'red' | 'blue');
     }
+
+    // 🚀 On se fie au serveur pour le temps et les stats
+    this.gameState = {
+      ...this.gameState,
+      gameTime: serverState.game_time ?? 0,
+    };
 
     // No need to manually trigger UI update here anymore
     // The parent GameEngine's update() method will handle it
@@ -347,6 +402,10 @@ export class ServerSyncEngine extends GameEngine {
   public reset(): void {
     this.cleanup();
     this.gameId = null;
+    // Nettoyer le localStorage lors du reset
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('clash_royale_game_id');
+    }
     super.reset();
   }
 
@@ -358,4 +417,30 @@ export class ServerSyncEngine extends GameEngine {
     // This would be populated from server state
     return 'Waiting for server analysis...';
   }
+
+  public initializeWithGameId(gameId: string) {
+    this.gameId = gameId;
+    // Persister le game_id dans localStorage pour survivre au refresh
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('clash_royale_game_id', gameId);
+    }
+    this.startServerSync();
+    return this.gameId!;
+  }
+
+  // Restaurer le game_id depuis localStorage au démarrage
+  public restoreFromStorage(): string | null {
+    if (typeof window !== 'undefined') {
+      const savedGameId = localStorage.getItem('clash_royale_game_id');
+      if (savedGameId) {
+        this.gameId = savedGameId;
+        this.startServerSync();
+        return savedGameId;
+      }
+    }
+    return null;
+  }
 }
+
+// Export singleton for direct use
+export const serverEngine = new ServerSyncEngine();

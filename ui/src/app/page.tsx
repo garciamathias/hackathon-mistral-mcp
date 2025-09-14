@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import TransitionScreen from "@/components/TransitionScreen";
 
 export default function Home() {
   const [showTransition, setShowTransition] = useState(false);
+  const router = useRouter();
 
   const handleCombatClick = () => {
-    setShowTransition(true);
+    const id = window.prompt("Entre un Game ID (copie/colle depuis ton terminal) :");
+    if (!id || !id.trim()) return; // pas d'ID => on reste au menu
+    router.push(`/arena?game_id=${encodeURIComponent(id.trim())}`);
   };
 
   return (
