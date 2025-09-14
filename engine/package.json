@@ -6,32 +6,38 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node -r ./tsconfig-paths-bootstrap.js dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts"
   },
-  "keywords": ["game", "server", "websocket", "real-time"],
+  "keywords": [
+    "game",
+    "server",
+    "websocket",
+    "real-time"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "express": "^4.21.2",
-    "ws": "^8.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "zod": "^3.24.1",
-    "uuid": "^11.0.5"
+    "express": "^4.21.2",
+    "tsconfig-paths": "^4.2.0",
+    "uuid": "^11.0.5",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.13",
     "@types/cors": "^2.8.17",
-    "@types/uuid": "^10.0.0",
+    "@types/express": "^5.0.0",
     "@types/node": "^22.10.5",
-    "typescript": "^5.7.3",
-    "tsx": "^4.19.2",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
     "@typescript-eslint/eslint-plugin": "^8.20.0",
     "@typescript-eslint/parser": "^8.20.0",
-    "eslint": "^9.18.0"
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
   }
 }
