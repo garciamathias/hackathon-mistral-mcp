@@ -263,7 +263,7 @@ function ArenaContent() {
   const getTroopGifPath = (troop: any) => {
     const norm = normalizeType(troop?.type);
     if (!norm) return null;
-    const gifType = troop.team === 'red' ? 'player' : 'opponent';
+    const gifType = troop.team === 'blue' ? 'player' : 'opponent';
     const cfg = TROOP_CONFIGS[norm];
     const fromConfig = cfg?.gifPaths?.walk?.[gifType];
 
@@ -417,7 +417,7 @@ function ArenaContent() {
                       if (!gifPath || !config) return null;
                       const p = t.position;
                       const hp = typeof t.health === "number" ? t.health : 0;
-                      const maxhp = typeof t.max_health === "number" && t.max_health > 0 ? t.max_health : 1;
+                      const maxhp = typeof t.maxHealth === "number" && t.maxHealth > 0 ? t.maxHealth : 1;
 
                       return (
                         <div
@@ -431,7 +431,7 @@ function ArenaContent() {
                             className="w-12 h-12 object-contain"
                             style={{ transform: `scale(${typeof config?.scale === 'object' ? (config.scale.walk ?? 1) : (config?.scale ?? 1)})` }}
                           />
-                          <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
+                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-gray-600 rounded">
                             <div
                               className={`h-full rounded transition-all duration-200 ${t.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
                               style={{ width: `${(hp / maxhp) * 100}%` }}
