@@ -163,25 +163,26 @@ function ArenaContent() {
         });
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnlineMode]);
 
   // Use appropriate game based on mode
   const game = isOnlineMode ? onlineGame : localGame;
   const troops = game.troops;
   const gameEngineTowers = isOnlineMode ? game.towers : localGame.towers;
-  const spawnTroop = isOnlineMode
-    ? (type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
-        // In online mode, only allow spawning for player's team
-        if (team === onlineGame.playerTeam) {
-          onlineGame.spawnTroop(type, team, row, col);
-        }
-      }
-    : localGame.spawnTroop;
+  // const spawnTroop = isOnlineMode
+  //   ? (type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+  //       // In online mode, only allow spawning for player's team
+  //       if (team === onlineGame.playerTeam) {
+  //         onlineGame.spawnTroop(type, team, row, col);
+  //       }
+  //     }
+  //   : localGame.spawnTroop;
   const startGame = isOnlineMode ? () => {} : localGame.startGame; // Online games start automatically
   const pauseGame = isOnlineMode ? onlineGame.pauseGame : localGame.pauseGame;
   const resumeGame = isOnlineMode ? onlineGame.resumeGame : localGame.resumeGame;
   const stopGame = isOnlineMode ? onlineGame.disconnect : localGame.stopGame;
-  const resetGame = isOnlineMode ? () => router.push('/lobby') : localGame.resetGame;
+  // const resetGame = isOnlineMode ? () => router.push('/lobby') : localGame.resetGame;
   const isGameRunning = isOnlineMode
     ? onlineGame.gameStatus === GameStatus.IN_PROGRESS
     : localGame.isGameRunning;

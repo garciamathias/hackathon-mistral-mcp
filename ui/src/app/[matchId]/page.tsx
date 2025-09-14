@@ -10,7 +10,7 @@ import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
 import Emote from "@/components/Emote";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
-import { GameStatus } from "@/types/backend";
+import { GameStatus, TroopState } from "@/types/backend";
 
 // Coûts d'élixir pour chaque troupe
 const TROOP_COSTS: Record<TroopType, number> = {
@@ -113,6 +113,7 @@ export default function OnlineArena() {
     return () => {
       onlineGame.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId]);
 
   // Game variables
@@ -188,7 +189,7 @@ export default function OnlineArena() {
     const gifType = troop.team === 'blue' ? 'player' : 'opponent';
     const cfg = TROOP_CONFIGS[norm];
 
-    const isAttacking = troop.state === 'ATTACKING_TOWER' || troop.state === 12;
+    const isAttacking = (troop.state as any) === 'ATTACKING_TOWER' || (troop.state as any) === TroopState.ATTACKING_TOWER;
 
     const gifPaths = isAttacking ? cfg?.gifPaths?.fight : cfg?.gifPaths?.walk;
     const fallback = isAttacking ? FALLBACK_FIGHT[norm] : FALLBACK_WALK[norm];
@@ -263,7 +264,7 @@ export default function OnlineArena() {
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
       <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
 
-      {gameEnded && winner && <GameEndScreen winner={winner} onRestart={handleRestart} />}
+      {gameEnded && winner && winner !== 'draw' && <GameEndScreen winner={winner} onRestart={handleRestart} />}
 
       <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
         <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
@@ -361,7 +362,7 @@ export default function OnlineArena() {
                             style={{
                               transform: `scale(${
                                 typeof config?.scale === 'object'
-                                  ? ((t.state === 'ATTACKING_TOWER' || t.state === 12) ? (config.scale.fight ?? 1) : (config.scale.walk ?? 1))
+                                  ? ((t.state as any === 'ATTACKING_TOWER' || t.state as any === TroopState.ATTACKING_TOWER) ? (config.scale.fight ?? 1) : (config.scale.walk ?? 1))
                                   : (config?.scale ?? 1)
                               })`
                             }}

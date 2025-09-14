@@ -7,14 +7,13 @@ import TransitionScreen from "@/components/TransitionScreen";
 
 export default function Home() {
   const [showTransition, setShowTransition] = useState(false);
-  const [gameMode, setGameMode] = useState<'local' | 'online' | null>(null);
+  // const [gameMode, setGameMode] = useState<'local' | 'online' | null>(null);
   const router = useRouter();
 
-  const handleLocalCombat = () => {
-    setGameMode('local');
-    setShowTransition(true);
-
-  };
+  // const handleLocalCombat = () => {
+  //   setGameMode('local');
+  //   setShowTransition(true);
+  // };
 
   const handleOnlineCombat = () => {
     router.push('/lobby');
@@ -54,7 +53,7 @@ export default function Home() {
       </div>
 
       {/* Écran de transition */}
-      {showTransition && gameMode === 'local' && (
+      {showTransition && (
         <TransitionScreen
           onTransitionComplete={() => {
             setShowTransition(false);
