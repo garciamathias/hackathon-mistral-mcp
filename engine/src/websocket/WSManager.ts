@@ -173,7 +173,7 @@ export class WSManager {
     this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
 
-      for (const [clientId, client] of this.clients.entries()) {
+      for (const [, client] of this.clients.entries()) {
         if (!client.isAlive) {
           // Client didn't respond to last ping
           this.handleDisconnection(client);

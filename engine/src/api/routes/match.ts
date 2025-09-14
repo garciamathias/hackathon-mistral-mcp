@@ -49,7 +49,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         timestamp: Date.now()
       };
 
-      res.json(response);
+      return res.json(response);
     } catch (error) {
       console.error('Error creating match:', error);
       const response: ApiResponse = {
@@ -60,7 +60,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         },
         timestamp: Date.now()
       };
-      res.status(500).json(response);
+      return res.status(500).json(response);
     }
   });
 
@@ -161,7 +161,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
           timestamp: Date.now()
         };
 
-        res.json(response);
+        return res.json(response);
       } catch (error) {
         console.error('Error joining match:', error);
         const response: ApiResponse = {
@@ -172,7 +172,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
           },
           timestamp: Date.now()
         };
-        res.status(500).json(response);
+        return res.status(500).json(response);
       }
     }
   );
@@ -201,7 +201,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         timestamp: Date.now()
       };
 
-      res.json(response);
+      return res.json(response);
     } catch (error) {
       console.error('Error getting match info:', error);
       const response: ApiResponse = {
@@ -212,12 +212,12 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         },
         timestamp: Date.now()
       };
-      res.status(500).json(response);
+      return res.status(500).json(response);
     }
   });
 
   // List all matches
-  router.get('/', (req, res: Response) => {
+  router.get('/', (_req, res: Response) => {
     try {
       const rooms = wsManager.getRoomList();
       const response: ApiResponse = {
@@ -225,7 +225,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         data: { matches: rooms },
         timestamp: Date.now()
       };
-      res.json(response);
+      return res.json(response);
     } catch (error) {
       console.error('Error listing matches:', error);
       const response: ApiResponse = {
@@ -236,7 +236,7 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         },
         timestamp: Date.now()
       };
-      res.status(500).json(response);
+      return res.status(500).json(response);
     }
   });
 

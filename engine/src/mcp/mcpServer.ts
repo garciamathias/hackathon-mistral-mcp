@@ -2,15 +2,13 @@ import {
   JSONRPCRequest,
   JSONRPCResponse,
   JSONRPCError,
-  InitializeParams,
   InitializeResult,
   ToolCallParams,
   ToolCallResult,
   ListToolsResult,
   ListResourcesResult,
   ListPromptsResult,
-  MCPErrorCode,
-  Tool
+  MCPErrorCode
 } from './protocol';
 import { MCPTools } from './tools';
 
@@ -70,7 +68,7 @@ export class MCPServer {
   }
 
   private handleInitialize(request: JSONRPCRequest): JSONRPCResponse {
-    const params = request.params as InitializeParams;
+    // const params = request.params as InitializeParams;
 
     if (this.initialized) {
       return this.createErrorResponse(

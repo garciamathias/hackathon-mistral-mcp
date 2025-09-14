@@ -65,10 +65,10 @@ export class TowerEntity {
 
     // Find closest enemy
     let closestEnemy = enemiesInRange[0];
-    let closestDistance = Math.sqrt(
+    let closestDistance = closestEnemy ? Math.sqrt(
       Math.pow(closestEnemy.position.row - this.data.position.row, 2) +
       Math.pow(closestEnemy.position.col - this.data.position.col, 2)
-    );
+    ) : 0;
 
     for (const enemy of enemiesInRange) {
       const distance = Math.sqrt(

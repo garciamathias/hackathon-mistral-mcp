@@ -257,7 +257,7 @@ export class GameEngine {
         // Create a simple entity wrapper with actual movement logic
         troopEntity = {
           data: troopData,
-          update: (deltaTime: number, towers: any[], flaggedCells: Set<string>, gameEngine: any) => {
+          update: (deltaTime: number, towers: any[], _flaggedCells: Set<string>, gameEngine: any) => {
             // Skip if dead
             if (!troopData.isAlive || troopData.state === TroopState.DEAD) return;
 
@@ -291,10 +291,10 @@ export class GameEngine {
 
             // Choose closest bridge
             let closestBridge = bridges[0];
-            let closestDist = Math.sqrt(
+            let closestDist = bridges[0] ? Math.sqrt(
               Math.pow(bridges[0].row - troopData.position.row, 2) +
               Math.pow(bridges[0].col - troopData.position.col, 2)
-            );
+            ) : 0;
 
             for (const bridge of bridges) {
               const dist = Math.sqrt(
@@ -307,8 +307,8 @@ export class GameEngine {
               }
             }
 
-            const bridgeRow = closestBridge.row;
-            const bridgeCol = closestBridge.col;
+            const bridgeRow = closestBridge?.row ?? 17;
+            const bridgeCol = closestBridge?.col ?? 9;
 
             // Move to bridge first
             if (troopData.state === TroopState.MOVING_TO_BRIDGE) {

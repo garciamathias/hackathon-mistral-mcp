@@ -34,7 +34,7 @@ export function authenticatePlayer(
 }
 
 // Validate request body middleware
-export function validateBody<T>(schema: any) {
+export function validateBody(schema: any) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = schema.parse(req.body);

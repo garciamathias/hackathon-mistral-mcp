@@ -21,7 +21,7 @@ export const getMCPServer = (gameManager: MCPGameManager): any => {
       player_name: z.string().optional().describe("Name of the player creating the game"),
       session_id: z.string().optional().describe("Optional session ID to maintain context"),
     },
-    async ({ player_name, session_id }): Promise<CallToolResult> => {
+    async ({ player_name, session_id }: { player_name?: string; session_id?: string }): Promise<CallToolResult> => {
       const result = gameManager.createGame(player_name, session_id);
 
       return {
@@ -44,7 +44,7 @@ export const getMCPServer = (gameManager: MCPGameManager): any => {
       player_name: z.string().optional().describe("Name of the player joining"),
       session_id: z.string().optional().describe("Optional session ID to maintain context"),
     },
-    async ({ match_id, player_name, session_id }): Promise<CallToolResult> => {
+    async ({ match_id, player_name, session_id }: { match_id: string; player_name?: string; session_id?: string }): Promise<CallToolResult> => {
       const result = gameManager.joinGame(match_id, player_name, session_id);
 
       return {
@@ -65,7 +65,7 @@ export const getMCPServer = (gameManager: MCPGameManager): any => {
     {
       match_id: z.string().describe("ID of the match to check"),
     },
-    async ({ match_id }): Promise<CallToolResult> => {
+    async ({ match_id }: { match_id: string }): Promise<CallToolResult> => {
       const status = gameManager.getGameStatus(match_id);
 
       if (!status) {
@@ -105,7 +105,7 @@ export const getMCPServer = (gameManager: MCPGameManager): any => {
       col: z.number().int().min(0).max(18).describe("Column position (0-18)"),
       session_id: z.string().optional().describe("Optional session ID to maintain context"),
     },
-    async ({ match_id, troop_type, row, col, session_id }): Promise<CallToolResult> => {
+    async ({ match_id, troop_type, row, col, session_id }: { match_id: string; troop_type: 'giant' | 'babyDragon' | 'miniPekka' | 'valkyrie'; row: number; col: number; session_id?: string }): Promise<CallToolResult> => {
       const result = gameManager.spawnTroop(match_id, troop_type, row, col, session_id);
 
       return {

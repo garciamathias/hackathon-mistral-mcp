@@ -1,4 +1,4 @@
-import { TroopType, TroopState, Position, TroopData, TROOP_CONFIGS } from '@shared/troop';
+import { TroopType, TroopState, TroopData, TROOP_CONFIGS } from '@shared/troop';
 import { TowerData } from '@shared/tower';
 import { GameEngine } from '../../core/GameEngine';
 
@@ -95,8 +95,9 @@ export class GiantEntity {
 
     // Choisir le pont le plus proche
     const closestBridgeIndex = distances.indexOf(Math.min(...distances));
-    this.data.bridgeTarget = { ...BRIDGES[closestBridgeIndex] };
-    this.data.targetPosition = { ...this.data.bridgeTarget };
+    const bridge = BRIDGES[closestBridgeIndex];
+    this.data.bridgeTarget = bridge ? { row: bridge.row, col: bridge.col } : { row: 16, col: 9 };
+    this.data.targetPosition = { row: this.data.bridgeTarget.row, col: this.data.bridgeTarget.col };
     this.data.state = TroopState.MOVING_TO_BRIDGE;
   }
 
@@ -175,8 +176,9 @@ export class GiantEntity {
         }
         
         // Vérifier si le Giant est bloqué par les flagged cells
-        const isBlockedByFlaggedCells = !!(flaggedCells && this.data.towerTarget && 
-          this.isBlockedByTargetFlaggedCells(flaggedCells, activeTowers.find(tower => tower.id === this.data.towerTarget)));
+        const targetTower = activeTowers.find(tower => tower.id === this.data.towerTarget);
+        const isBlockedByFlaggedCells = !!(flaggedCells && this.data.towerTarget && targetTower &&
+          this.isBlockedByTargetFlaggedCells(flaggedCells, targetTower));
         
         this.attackTower(deltaTime, activeTowers, gameEngine, isBlockedByFlaggedCells);
         break;
@@ -201,7 +203,7 @@ export class GiantEntity {
     if (stopRange && distance <= stopRange) {
       console.log(`Giant ${this.data.id} stopping movement - in range! Distance: ${distance.toFixed(2)}`);
       this.data.isInCombat = true;
-      this.data.state = GiantState.ATTACKING_TOWER;
+      this.data.state = TroopState.ATTACKING_TOWER;
       return;
     }
 
@@ -402,10 +404,6 @@ export class GiantEntity {
   }
 
 
-  private startTargetingTower(activeTowers: any[]): void {
-    this.findAndTargetEnemyTower(activeTowers);
-  }
-
 
 
 
@@ -456,10 +454,10 @@ export class GiantEntity {
     // Trouver la tour la plus proche
     const { position } = this.data;
     let closestTower = enemyTowers[0];
-    let closestDistance = Math.sqrt(
+    let closestDistance = closestTower ? Math.sqrt(
       Math.pow(closestTower.position.row - position.row, 2) +
       Math.pow(closestTower.position.col - position.col, 2)
-    );
+    ) : 0;
 
     for (const tower of enemyTowers) {
       const distance = Math.sqrt(
@@ -474,8 +472,10 @@ export class GiantEntity {
     }
 
     // Cibler la tour la plus proche
-    this.data.towerTarget = closestTower.id;
-    this.data.targetPosition = { row: closestTower.position.row, col: closestTower.position.col };
+    if (closestTower) {
+      this.data.towerTarget = closestTower.id;
+      this.data.targetPosition = { row: closestTower.position.row, col: closestTower.position.col };
+    }
     this.data.state = TroopState.TARGETING_TOWER;
   }
 

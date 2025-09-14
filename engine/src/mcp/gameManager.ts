@@ -1,7 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
 import { WSManager } from '@websocket/WSManager';
-import { GameRoom } from '@core/GameRoom';
-import { TroopType } from '@shared/troop';
 import {
   MCPSession,
   CreateGameResponse,

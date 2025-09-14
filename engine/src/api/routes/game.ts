@@ -68,7 +68,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
           timestamp: Date.now()
         };
 
-        res.json(response);
+        return res.json(response);
       } catch (error) {
         console.error('Error playing card:', error);
         const response: ApiResponse = {
@@ -79,7 +79,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
           },
           timestamp: Date.now()
         };
-        res.status(500).json(response);
+        return res.status(500).json(response);
       }
     }
   );
@@ -109,7 +109,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
         timestamp: Date.now()
       };
 
-      res.json(response);
+      return res.json(response);
     } catch (error) {
       console.error('Error getting game state:', error);
       const response: ApiResponse = {
@@ -120,7 +120,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
         },
         timestamp: Date.now()
       };
-      res.status(500).json(response);
+      return res.status(500).json(response);
     }
   });
 
@@ -168,7 +168,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
           timestamp: Date.now()
         };
 
-        res.json(response);
+        return res.json(response);
       } catch (error) {
         console.error('Error performing game action:', error);
         const response: ApiResponse = {
@@ -179,13 +179,13 @@ export function createGameRoutes(wsManager: WSManager): Router {
           },
           timestamp: Date.now()
         };
-        res.status(500).json(response);
+        return res.status(500).json(response);
       }
     }
   );
 
   // Get available troop types and costs
-  router.get('/troops', (req, res: Response) => {
+  router.get('/troops', (_req, res: Response) => {
     try {
       const troops = Object.values(TroopType).map(type => ({
         type,
@@ -198,7 +198,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
         timestamp: Date.now()
       };
 
-      res.json(response);
+      return res.json(response);
     } catch (error) {
       console.error('Error getting troop info:', error);
       const response: ApiResponse = {
@@ -209,7 +209,7 @@ export function createGameRoutes(wsManager: WSManager): Router {
         },
         timestamp: Date.now()
       };
-      res.status(500).json(response);
+      return res.status(500).json(response);
     }
   });
 

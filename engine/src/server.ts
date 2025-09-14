@@ -26,7 +26,7 @@ app.use(cors({
 app.use(express.json());
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({
     status: 'healthy',
     timestamp: Date.now(),
@@ -35,7 +35,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Info endpoint
-app.get('/api', (req, res) => {
+app.get('/api', (_req, res) => {
   res.json({
     name: 'Clash Royale Game Server',
     version: '1.0.0',
@@ -83,7 +83,7 @@ app.use('/api/match', (req, res, next) => {
       timestamp: Date.now()
     });
   }
-  matchRouter(req, res, next);
+  return matchRouter(req, res, next);
 });
 
 app.use('/api/game', (req, res, next) => {
@@ -94,7 +94,7 @@ app.use('/api/game', (req, res, next) => {
       timestamp: Date.now()
     });
   }
-  gameRouter(req, res, next);
+  return gameRouter(req, res, next);
 });
 
 // MCP Endpoint using SDK
@@ -128,7 +128,7 @@ app.post('/mcp', async (req, res) => {
 });
 
 // MCP GET endpoint (method not allowed)
-app.get('/mcp', (req, res) => {
+app.get('/mcp', (_req, res) => {
   console.log('Received GET MCP request');
   res.status(405).json({
     jsonrpc: '2.0',
@@ -141,7 +141,7 @@ app.get('/mcp', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Server error:', err);
   res.status(500).json({
     success: false,
@@ -154,7 +154,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 // 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({
     success: false,
     error: {
