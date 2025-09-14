@@ -6,7 +6,23 @@ const BACKEND_URL = process.env.BACKEND_URL || 'https://mcp-hackthon-production.
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const headers = await getSessionHeaders();
+
+    // First try to get headers from the request (client-side)
+    let playerId = request.headers.get('x-player-id');
+    let playerName = request.headers.get('x-player-name');
+
+    // If not in headers, fall back to server-side cookies
+    if (!playerId || !playerName) {
+      const sessionHeaders = await getSessionHeaders();
+      playerId = sessionHeaders['x-player-id'];
+      playerName = sessionHeaders['x-player-name'];
+    }
+
+    const headers = {
+      'x-player-id': playerId,
+      'x-player-name': playerName,
+      'Content-Type': 'application/json'
+    };
 
     console.log('[Frontend API /join] Request to join match:', {
       matchId: body.matchId,

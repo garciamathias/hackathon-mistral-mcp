@@ -6,9 +6,10 @@ import {
   GameSnapshot,
   PlayCardData
 } from '@/types/backend';
+import { getSessionHeaders } from '@/lib/clientSession';
 
 // Use relative URLs to call Next.js API routes
-// The session management is now handled server-side
+// The session management is now handled client-side with localStorage
 
 class ApiClient {
   private baseUrl: string;
@@ -25,13 +26,16 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint}`;
 
     try {
+      // Get session headers from localStorage
+      const sessionHeaders = getSessionHeaders();
+
       const response = await fetch(url, {
         ...options,
         headers: {
-          'Content-Type': 'application/json',
+          ...sessionHeaders,
           ...options.headers,
         },
-        // Include cookies for session management
+        // Include cookies for session management (fallback)
         credentials: 'same-origin'
       });
 
