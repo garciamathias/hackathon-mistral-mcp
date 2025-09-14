@@ -223,6 +223,11 @@ export class ValkyrieEntity {
         console.log(`Valkyrie ${this.data.id} target troop ${this.data.towerTarget} is dead`);
         return false;
       }
+      // Check if target is a flying troop (Valkyries can't target flying troops)
+      if (targetTroop.data.flying) {
+        console.log(`Valkyrie ${this.data.id} target troop ${this.data.towerTarget} is flying and cannot be targeted`);
+        return false;
+      }
       return true;
     }
 
@@ -521,6 +526,15 @@ export class ValkyrieEntity {
     }
     
     if (!target || (target.type === 'troop' && !target.isAlive)) {
+      this.data.state = ValkyrieState.SEEKING_TARGET;
+      this.data.towerTarget = undefined;
+      this.data.isInCombat = false;
+      return;
+    }
+
+    // Check if target is a flying troop (Valkyries can't attack flying troops)
+    if (target.type === 'troop' && 'flying' in target && target.flying) {
+      console.log(`Valkyrie ${this.data.id} cannot attack flying troop ${this.data.towerTarget}, switching to seeking mode`);
       this.data.state = ValkyrieState.SEEKING_TARGET;
       this.data.towerTarget = undefined;
       this.data.isInCombat = false;

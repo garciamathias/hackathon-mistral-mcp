@@ -5,6 +5,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useGameEngine } from "@/game/useGameEngine";
 import { useOnlineGame } from "@/hooks/useOnlineGame";
+
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
@@ -19,174 +20,52 @@ function ArenaContent() {
   const [onlineMatchId, setOnlineMatchId] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const showGrid = false;
 
+  const showGrid = false;
   const numRows = 34;
   const numCols = 18;
 
   const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
   const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
+  const router = useRouter();
+  const params = useSearchParams();
+  const gameId = params.get("game_id");
+  const [gameState, setGameState] = useState<GameState | null>(null);
 
-  const isArenaVisible = true; // L'arène est immédiatement visible pour éviter les délais de transition
-   
-  // Configuration des tours - mémorisé pour éviter les re-rendus
+  const isArenaVisible = true;
+
+  // Tour visuals (pour flags + sprites)
   const TOWER = React.useMemo(() => ({
     KING_RED: {
-      id: 'king_red',
-      name: 'King Red',
-      image: '/images/towers/king_red.png',
-      row: 2,
-      col: 8,
-      size: 6.5,
-      offsetX: 1.4,
-      offsetY: -2.8,
-      team: 'red',
-      type: 'king',
-      flagged_cells: [
-        [1, 7],
-        [1, 8],
-        [1, 9],
-        [1, 10],
-        [2, 10],
-        [2, 9],
-        [2, 8],
-        [2, 7],
-        [3, 7],
-        [3, 8],
-        [3, 9],
-        [3, 10],
-        [4, 10],
-        [4, 9],
-        [4, 8],
-        [4, 7],
-      ],
+      id: 'king_red', name: 'King Red', image: '/images/towers/king_red.png',
+      row: 2, col: 8, size: 6.5, offsetX: 1.4, offsetY: -2.8, team: 'red', type: 'king',
+      flagged_cells: [[1,7],[1,8],[1,9],[1,10],[2,10],[2,9],[2,8],[2,7],[3,7],[3,8],[3,9],[3,10],[4,10],[4,9],[4,8],[4,7]],
       active: true,
     },
     PRINCESS_RED_1: {
-      id: 'princess_red',
-      name: 'Princess Red',
-      image: '/images/towers/princess_red.png',
-      row: 6,
-      col: 3,
-      size: 4,
-      offsetX: -0.7,
-      offsetY: -3.3,
-      team: 'red',
-      type: 'princess',
-      flagged_cells: [
-        [5, 2],
-        [5, 3],
-        [5, 4],
-        [6, 4],
-        [7, 4],
-        [7, 3],
-        [7, 2],
-        [6, 2],
-        [6, 3],
-      ],
-      active: true,
+      id: 'princess_red_left', name: 'Princess Red', image: '/images/towers/princess_red.png',
+      row: 6, col: 3, size: 4, offsetX: -0.7, offsetY: -3.3, team: 'red', type: 'princess',
+      flagged_cells: [[5,2],[5,3],[5,4],[6,4],[7,4],[7,3],[7,2],[6,2],[6,3]], active: true,
     },
     PRINCESS_RED_2: {
-      id: 'princess_red_2',
-      name: 'Princess Red',
-      image: '/images/towers/princess_red.png',
-      row: 6,
-      col: 14,
-      size: 4,
-      offsetX: 0,
-      offsetY: -3.3,
-      team: 'red',
-      type: 'princess',
-      flagged_cells: [
-        [5, 13],
-        [5, 14],
-        [5, 15],
-        [6, 15],
-        [6, 14],
-        [6, 13],
-        [7, 13],
-        [7, 14],
-        [7, 15],
-      ],
-      active: true,
+      id: 'princess_red_right', name: 'Princess Red', image: '/images/towers/princess_red.png',
+      row: 6, col: 14, size: 4, offsetX: 0, offsetY: -3.3, team: 'red', type: 'princess',
+      flagged_cells: [[5,13],[5,14],[5,15],[6,15],[6,14],[6,13],[7,13],[7,14],[7,15]], active: true,
     },
     PRINCESS_BLUE_1: {
-      id: 'princess_blue',
-      name: 'Princess Blue',
-      image: '/images/towers/princess_blue.png',
-      row: 27,
-      col: 3,
-      size: 7.4,
-      offsetX: -0.4,
-      offsetY: -2,
-      team: 'blue',
-      type: 'princess',
-      flagged_cells: [
-        [26, 2],
-        [26, 3],
-        [26, 4],
-        [27, 4],
-        [27, 3],
-        [27, 2],
-        [28, 2],
-        [28, 3],
-        [28, 4],
-      ],
-      active: true,
+      id: 'princess_blue_left', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
+      row: 27, col: 3, size: 7.4, offsetX: -0.4, offsetY: -2, team: 'blue', type: 'princess',
+      flagged_cells: [[26,2],[26,3],[26,4],[27,4],[27,3],[27,2],[28,2],[28,3],[28,4]], active: true,
     },
     PRINCESS_BLUE_2: {
-      id: 'princess_blue_2',
-      name: 'Princess Blue',
-      image: '/images/towers/princess_blue.png',
-      row: 27,
-      col: 14,
-      size: 7.4,
-      offsetX: 0,
-      offsetY: -2,
-      team: 'blue',
-      type: 'princess',
-      flagged_cells: [
-        [26, 13],
-        [26, 14],
-        [26, 15],
-        [27, 15],
-        [27, 14],
-        [27, 13],
-        [28, 13],
-        [28, 14],
-        [28, 15],
-      ],
-      active: true,
+      id: 'princess_blue_right', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
+      row: 27, col: 14, size: 7.4, offsetX: 0, offsetY: -2, team: 'blue', type: 'princess',
+      flagged_cells: [[26,13],[26,14],[26,15],[27,15],[27,14],[27,13],[28,13],[28,14],[28,15]], active: true,
     },
     KING_BLUE: {
-      id: 'king_blue',
-      name: 'King Blue',
-      image: '/images/towers/king_blue.png',
-      row: 30,
-      col: 8,
-      size: 6.5,
-      offsetX: 1,
-      offsetY: -2,
-      team: 'blue',
-      type: 'king',
-      flagged_cells: [
-        [29, 7],
-        [30, 7],
-        [31, 7],
-        [32, 7],
-        [32, 8],
-        [31, 8],
-        [30, 8],
-        [29, 8],
-        [29, 9],
-        [29, 10],
-        [30, 10],
-        [30, 9],
-        [31, 9],
-        [31, 10],
-        [32, 10],
-        [32, 9],
-      ],
+      id: 'king_blue', name: 'King Blue', image: '/images/towers/king_blue.png',
+      row: 31, col: 8, size: 6.5, offsetX: 1, offsetY: -2, team: 'blue', type: 'king',
+      flagged_cells: [[30,7],[31,7],[32,7],[33,7],[33,8],[32,8],[31,8],[30,8],[30,9],[30,10],[31,10],[31,9],[32,9],[32,10],[33,10],[33,9]],
       active: true,
     }
   }), []);
@@ -296,345 +175,272 @@ function ArenaContent() {
   // Fonction pour obtenir toutes les cellules marquées des tours actives
   const getActiveTowersFlaggedCells = React.useCallback(() => {
     const flaggedCells = new Set<string>();
+
     
-    Object.values(TOWER).forEach(tower => {
-      // Vérifier si la tour est encore vivante dans le GameEngine
-      const gameEngineTower = gameEngineTowers.find(t => t.id === tower.id);
-      const isTowerAlive = !gameEngineTower || gameEngineTower.isAlive;
-      
-      if (tower.active && tower.flagged_cells && isTowerAlive) {
-        tower.flagged_cells.forEach(([row, col]) => {
-          flaggedCells.add(`${row}-${col}`);
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || data.error) return;
+        setGameState(data);
+      } catch (error) {
+        console.error("Failed to fetch game state:", error);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [gameId]);
+
+  const handleCardDragStart = (troopType: TroopType) => setDraggedCard({ troopType, team: currentTeam });
+  const handleCardDragEnd = () => setDraggedCard(null);
+  
+  const handleCellDrop = async (row: number, col: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedCard && gameId) {
+      try {
+        await fetch("/api/game/spawn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            game_id: gameId,
+            troop_type: draggedCard.troopType,
+            position: { row, col },
+            team: draggedCard.team,
+          }),
         });
+        setDraggedCard(null);
+      } catch (error) {
+        console.error("Failed to spawn troop:", error);
       }
-    });
-    
-    return flaggedCells;
-  }, [gameEngineTowers, TOWER]);
-
-  // Obtenir les flagged cells pour le moteur de jeu - mis à jour quand les tours changent
-  const flaggedCells = React.useMemo(() => getActiveTowersFlaggedCells(), [getActiveTowersFlaggedCells]);
-
-  // Connecter les flagged cells au moteur de jeu quand elles changent
-  React.useEffect(() => {
-    if (flaggedCells) {
-      gameEngine.connectFlaggedCells(flaggedCells);
-    }
-  }, [flaggedCells]);
-
-  // Fonctions pour le drag and drop
-  const handleCardDragStart = (troopType: TroopType) => {
-    setDraggedCard({ troopType, team: currentTeam });
-  };
-
-  const handleCardDragEnd = () => {
-    setDraggedCard(null);
-  };
-
-  const handleCellDrop = (row: number, col: number, e: React.DragEvent) => {
-    e.preventDefault();
-    if (draggedCard && isGameRunning) {
-      spawnTroop(draggedCard.troopType, draggedCard.team, row, col);
-      setDraggedCard(null);
     }
   };
+  
+  const handleCellDragOver = (e: React.DragEvent) => e.preventDefault();
+  const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
 
-  const handleCellDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
+  const normalizeType = (s: any): TroopType | null => {
+    const u = String(s || "").toUpperCase();
+    if (u === "GIANT" || u === "BABY_DRAGON" || u === "MINI_PEKKA" || u === "VALKYRIE") return u as TroopType;
+    console.warn("Unknown troop.type from API:", s);
+    return null;
   };
 
-  const switchTeam = () => {
-    setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
+  const FALLBACK_WALK: Record<TroopType, {player: string; opponent: string}> = {
+    GIANT: { player: "/images/troops/giant/Giant_walk_player.gif", opponent: "/images/troops/giant/Giant_walk_opponent.gif" },
+    BABY_DRAGON: { player: "/images/troops/babydragon/BabyDragon_walk_player.gif", opponent: "/images/troops/babydragon/BabyDragon_walk_opponent.gif" },
+    MINI_PEKKA: { player: "/images/troops/minipekka/MiniPekka_walk_player.gif", opponent: "/images/troops/minipekka/MiniPekka_walk_opponent.gif" },
+    VALKYRIE: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
   };
 
-  // Fonction pour obtenir le GIF path d'une troupe
   const getTroopGifPath = (troop: any) => {
-    const config = TROOP_CONFIGS[troop.type as TroopType];
-    if (!config) return null;
+    const norm = normalizeType(troop?.type);
+    if (!norm) return null;
+    const gifType = troop.team === 'red' ? 'player' : 'opponent';
+    const cfg = TROOP_CONFIGS[norm];
+    const fromConfig = cfg?.gifPaths?.walk?.[gifType];
 
-    if (troop.isInCombat) {
-      // En combat : utiliser la position relative de la cible
-      // Si la cible est au-dessus (row plus petite), utiliser "player", sinon "opponent"
-      const targetIsAbove = troop.targetPosition.row < troop.position.row;
-      const gifType = targetIsAbove ? 'player' : 'opponent';
-      return `${config.gifPaths.fight[gifType as 'player' | 'opponent']}?v=${troop.isInCombat}`;
-    } else {
-      // Mode marche - déterminer la direction
-      const isMovingDown = troop.targetPosition.row > troop.position.row;
-      const isMovingUp = troop.targetPosition.row < troop.position.row;
-      
-      let gifType: 'player' | 'opponent';
-      if (isMovingDown) {
-        gifType = 'opponent'; // Vers le bas = opponent
-      } else if (isMovingUp) {
-        gifType = 'player'; // Vers le haut = player
-      } else {
-        // Mouvement horizontal ou statique, utiliser selon l'équipe
-        gifType = troop.team === 'red' ? 'player' : 'opponent';
-      }
-      
-      return `${config.gifPaths.walk[gifType]}?v=${troop.isInCombat}`;
-    }
+    return (typeof fromConfig === "string" && fromConfig.length > 0)
+      ? `${fromConfig}?v=${troop.id}`
+      : `${FALLBACK_WALK[norm][gifType]}?v=${troop.id}`;
   };
 
-  // Fonction de redémarrage du jeu
   const handleRestart = () => {
-    resetGame();
-    // Redémarrer le jeu après un court délai
-    setTimeout(() => {
-      startGame();
-    }, 100);
+    router.push("/");
   };
+
+  if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
+  if (!gameState) return <div>Loading game...</div>;
+
+  // Debug: log les troupes reçues
+  console.log("TROUPES REÇUES:", gameState?.troops);
 
   return (
-    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${
-      isArenaVisible ? 'opacity-100' : 'opacity-0'
-    }`}>
-      {/* Fond flou */}
-      <img
-        src="/images/backgrounds/arena_in_game.png"
-        alt="Goal Background Blurred"
-        className="absolute inset-0 w-full h-full object-cover blur-sm"
-      />
-      
-      {/* Écran de fin de partie */}
-      {gameEnded && winner && (
-        <GameEndScreen 
-          winner={winner} 
-          onRestart={handleRestart}
-        />
-      )}
-      
-      {/* Container avec ratio 9/16 */}
-      <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
-        <img
-          src="/images/backgrounds/arena_in_game.png"
-          alt="Arena In Game"
-          className="w-full h-full object-cover"
-        />
+    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
 
-        {/* Damier interactif */}
-        <div className="absolute  inset-0 pl-[10%] pr-[9.8%] pt-[27.8%] pb-[34.2%]">
-          <div className={`w-full h-full grid gap-0`} style={{
-            gridTemplateColumns: `repeat(${numCols}, 1fr)`,
-            gridTemplateRows: `repeat(${numRows}, 1fr)`
-          }}>
+      {gameState.is_game_over && gameState.winner && <GameEndScreen winner={gameState.winner as "red" | "blue"} onRestart={handleRestart} />}
+
+      <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
+        <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
+
+        <div className="absolute inset-0 pl-[10%] pr-[9.8%] pt-[27.8%] pb-[34.2%]">
+          <div className={`w-full h-full grid gap-0`} style={{ gridTemplateColumns: `repeat(${numCols}, 1fr)`, gridTemplateRows: `repeat(${numRows}, 1fr)` }}>
             {Array.from({ length: numRows * numCols }, (_, index) => {
               const row = Math.floor(index / numCols);
               const col = index % numCols;
               const isEven = (row + col) % 2 === 0;
-              const towerPosition = Object.values(TOWER).find(pos => {
-                return row === pos.row && col === pos.col;
-              });
-              
-              // Afficher l'image seulement sur la case principale (coin supérieur gauche)
-              const shouldShowTower = towerPosition && (
-                row === towerPosition.row && col === towerPosition.col
-              );
-              
-              const towerImage = shouldShowTower ? towerPosition.image : null;
-              const tower = towerPosition;
-              
+              const towerPosition = Object.values(TOWER).find(pos => row === pos.row && col === pos.col);
+              const shouldShowTower = !!towerPosition;
+              const tower = towerPosition || null;
+
               return (
                 <div
                   key={index}
                   className={`w-full h-full transition-all duration-200 relative ${!showGrid ? 'bg-transparent' : 'bg-black/20'}
-                      ${
-                     draggedCard 
-                       ? `cursor-crosshair ${
-                           draggedCard.team === 'red' 
-                             ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' 
-                             : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'
-                         }`
-                       : 'cursor-default'
-                   } ${
-                     isEven 
-                         ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'  
-                         : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
-                   }`}
-                   onDrop={(e) => handleCellDrop(row, col, e)}
-                   onDragOver={handleCellDragOver}
+                    ${
+                      draggedCard 
+                        ? `cursor-crosshair ${draggedCard.team === 'red' ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'}`
+                        : 'cursor-default'
+                    } ${
+                      isEven ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                             : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                    }`}
+                  onDrop={(e) => handleCellDrop(row, col, e)}
+                  onDragOver={handleCellDragOver}
                 >
-                  {towerImage && (() => {
-                    // Vérifier si la tour est morte dans le GameEngine
-                    const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
-                    const isTowerDead = gameEngineTower && !gameEngineTower.isAlive;
-                    
-                    return !isTowerDead ? (
+                  {/* Debug overlay minimal */}
+                  {(gameState.troops ?? []).some(t => Math.floor(t.position.row) === row && Math.floor(t.position.col) === col) && (
+                    <div className="absolute inset-0 z-30 pointer-events-none ring-2 ring-green-300/60"></div>
+                  )}
+                  
+                  {shouldShowTower && (() => {
+                    const engineTower = gameState.towers[tower!.id];
+                    const dead = engineTower && engineTower.health <= 0;
+                    if (dead) return null;
+
+                    return (
                       <>
                         <img
-                          src={towerImage}
-                          alt={tower?.name}
+                          src={tower!.image}
+                          alt={tower!.name}
                           className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
-                          style={{
-                            transform: `scale(${tower?.size}) translate(${tower?.offsetX}px, ${tower?.offsetY}px)`
-                          }}
+                          style={{ transform: `scale(${tower!.size}) translate(${tower!.offsetX}px, ${tower!.offsetY}px)` }}
                         />
-                      {/* Health Bar pour chaque tour */}
-                      <div 
-                        className="absolute z-20 pointer-events-none"
-                        style={{
-                          left: `${(tower as any).offsetX - 16}px`,
-                          top: `${(tower as any).type === 'king' ? 
-                            ((tower as any).team === 'blue' ? +20 : -60) : 
-                            ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)}px`,
-                        }}
-                      >
-                        {(() => {
-                          // Trouver les données réelles de la tour dans le GameEngine
-                          const gameEngineTower = gameEngineTowers.find(t => t.id === tower?.id);
-                          const currentHealth = gameEngineTower?.health || (tower?.type === 'king' ? 4825 : 3052);
-                          const maxHealth = gameEngineTower?.maxHealth || (tower?.type === 'king' ? 4825 : 3052);
-                          
-                          return (
-                            <TowerHealthBar
-                              currentHealth={currentHealth}
-                              maxHealth={maxHealth}
-                              team={(tower?.team as 'red' | 'blue') || 'red'}
-                            />
-                          );
-                        })()}
-                      </div>
-                      </>
-                    ) : null;
-                  })()}
-                  
-                  {/* Rendu des troupes sur cette cellule */}
-                  {troops
-                    .filter(troop => 
-                      Math.floor(troop.position.row) === row && 
-                      Math.floor(troop.position.col) === col
-                    )
-                    .map(troop => {
-                      const gifPath = getTroopGifPath(troop);
-                      const config = TROOP_CONFIGS[troop.type as TroopType];
-                      
-                      if (!gifPath || !config) return null;
-                      
-                      return (
                         <div
-                          key={troop.id}
-                          className={`absolute z-20 w-full h-full flex items-center justify-center pointer-events-none`}
+                          className="absolute z-20 pointer-events-none"
                           style={{
-                            transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)`
+                            left: `${(tower as any).offsetX - 16}px`,
+                            top: `${
+                              (tower as any).type === 'king'
+                                ? ((tower as any).team === 'blue' ? 20 : -60)
+                                : ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)
+                            }px`,
                           }}
                         >
-                          {/* GIF de la troupe */}
+                          {(() => {
+                            const t = engineTower;
+                            const currentHealth = t?.health || ((tower as any).type === 'king' ? 4825 : 3052);
+                            const maxHealth = t?.max_health || ((tower as any).type === 'king' ? 4825 : 3052);
+                            return <TowerHealthBar currentHealth={currentHealth} maxHealth={maxHealth} team={(tower as any).team} />;
+                          })()}
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {(gameState.troops ?? [])
+                    .filter(t => {
+                      const p = t?.position;
+                      return p && Number.isFinite(p.row) && Number.isFinite(p.col)
+                        && Math.floor(p.row) === row && Math.floor(p.col) === col;
+                    })
+                    .map(t => {
+                      const norm = normalizeType(t.type);
+                      if (!norm) return null;
+                      const config = TROOP_CONFIGS[norm];
+                      const gifPath = getTroopGifPath(t);
+                      if (!gifPath || !config) return null;
+                      const p = t.position;
+                      const hp = typeof t.health === "number" ? t.health : 0;
+                      const maxhp = typeof t.max_health === "number" && t.max_health > 0 ? t.max_health : 1;
+
+                      return (
+                        <div
+                          key={t.id}
+                          className="absolute z-20 w-full h-full flex items-center justify-center pointer-events-none"
+                          style={{ transform: `translate(${(p.col - Math.floor(p.col)) * 100}%, ${(p.row - Math.floor(p.row)) * 100}%)` }}
+                        >
                           <img
-                            key={`${troop.id}-${troop.isInCombat ? 'combat' : 'walk'}`}
                             src={gifPath}
-                            alt={`${troop.type} ${troop.team}`}
+                            alt={`${norm} ${t.team}`}
                             className="w-12 h-12 object-contain"
-                            style={{
-                              transform: `scale(${config.scale})`
-                            }}
+                            style={{ transform: `scale(${typeof config?.scale === 'object' ? (config.scale.walk ?? 1) : (config?.scale ?? 1)})` }}
                           />
-                          
-                          {/* Barre de vie */}
                           <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
-                            <div 
-                              className={`h-full rounded transition-all duration-200 ${
-                                troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'
-                              }`}
-                              style={{ width: `${(troop.health / troop.maxHealth) * 100}%` }}
+                            <div
+                              className={`h-full rounded transition-all duration-200 ${t.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
+                              style={{ width: `${(hp / maxhp) * 100}%` }}
                             />
                           </div>
                         </div>
                       );
-                    })
-                  }
+                    })}
                 </div>
               );
             })}
           </div>
         </div>
-        
-        {/* Timer du jeu */}
-        <div className=" absolute top-4 right-4 z-10">
+
+        <div className="absolute top-4 right-4 z-10">
           <ClashTimer />
         </div>
 
-          {/* Barre de cartes en bas */}
-          <div className="fixed bottom-0 left-0 right-0 z-10">
-            <div className="flex justify-center items-end pb-4">
-              {/* Container avec background */}
-              <div className="relative w-[80%] max-w-md">
-                <img
-                  src="/images/cards/more/card_box.png"
-                  alt="Card Box"
-                  className="w-full h-44 object-fill rounded-t-lg"
-                />
-                
-                {/* Grid de cartes */}
-                <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
-                  {/* Baby Dragon Card */}
-                  <div
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
-                    }`}
-                    draggable={isGameRunning}
-                    onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
-                    onDragEnd={handleCardDragEnd}
-                  >
-                    <img
-                      src="/images/cards/more/BabyDragonCard.png"
-                      alt={`${currentTeam} Baby Dragon`}
-                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
-                    />
-                  </div>
+        {/* Debug: affichage temporaire de tous les troops */}
+        {(gameState.troops ?? []).map(t => (
+          <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
+            {t.type} {t.team} @ {t.position.row},{t.position.col}
+          </div>
+        ))}
 
-                  {/* Mini PEKKA Card */}
-                  <div
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
-                    }`}
-                    draggable={isGameRunning}
-                    onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
-                    onDragEnd={handleCardDragEnd}
-                  >
-                    <img
-                      src="/images/cards/more/MiniPEKKACard.png"
-                      alt={`${currentTeam} Mini PEKKA`}
-                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
-                    />
-                  </div>
+        {/* Barre de cartes */}
+        <div className="fixed bottom-0 left-0 right-0 z-10">
+          <div className="flex justify-center items-end pb-4">
+            <div className="relative w-[80%] max-w-md">
+              <img src="/images/cards/more/card_box.png" alt="Card Box" className="w-full h-44 object-fill rounded-t-lg" />
+              <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
+                {/* Baby Dragon */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/BabyDragonCard.png" alt={`${currentTeam} Baby Dragon`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
 
-                  {/* Giant Card */}
-                  <div
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
-                    }`}
-                    draggable={isGameRunning}
-                    onDragStart={() => handleCardDragStart(TroopType.GIANT)}
-                    onDragEnd={handleCardDragEnd}
-                  >
-                    <img
-                      src="/images/cards/more/GiantCard.png"
-                      alt={`${currentTeam} Giant`}
-                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
-                    />
-                  </div>
+                {/* Mini PEKKA */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/MiniPEKKACard.png" alt={`${currentTeam} Mini PEKKA`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
 
-                  {/* Valkyrie Card */}
-                  <div
-                    className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                      !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
-                    }`}
-                    draggable={isGameRunning}
-                    onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
-                    onDragEnd={handleCardDragEnd}
-                  >
-                    <img
-                      src="/images/cards/more/ValkyrieCard.png"
-                      alt={`${currentTeam} Valkyrie`}
-                      className="w-full h-full object-contain drop-shadow-lg pointer-events-none"
-                    />
-                  </div>
+                {/* Giant */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.GIANT)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/GiantCard.png" alt={`${currentTeam} Giant`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
+
+                {/* Valkyrie */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/ValkyrieCard.png" alt={`${currentTeam} Valkyrie`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">
@@ -728,22 +534,9 @@ function ArenaContent() {
               </>
             )}
           </div>
-          
-            {/* Instructions pour le drag and drop */}
-            {isGameRunning && (
-              <div className="text-center">
-                <div className="bg-black/50 rounded-lg p-3 border border-white/20">
-                  <p className="text-white text-sm font-medium">
-                    Drag cards from the bottom to spawn {currentTeam} troops
-                  </p>
-                  <p className="text-gray-300 text-xs mt-1">
-                    Switch team with the button above
-                  </p>
-                </div>
-              </div>
-            )}
         </div>
       </div>
+    </div>
   );
 }
 

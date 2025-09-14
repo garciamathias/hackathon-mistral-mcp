@@ -13,6 +13,7 @@ export default function Home() {
   const handleLocalCombat = () => {
     setGameMode('local');
     setShowTransition(true);
+
   };
 
   const handleOnlineCombat = () => {

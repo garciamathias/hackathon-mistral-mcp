@@ -13,12 +13,12 @@ export interface GameState {
 }
 
 export class GameEngine {
-  private troops: Map<string, TroopEntity> = new Map();
-  private towers: Map<string, TowerEntity> = new Map();
-  private gameState: GameState;
+  protected troops: Map<string, TroopEntity> = new Map();
+  protected towers: Map<string, TowerEntity> = new Map();
+  protected gameState: GameState;
   private animationFrameId: number | null = null;
-  private onUpdateCallback?: (troops: BaseTroop[]) => void;
-  private onGameEndCallback?: (winner: 'red' | 'blue') => void;
+  protected onUpdateCallback?: (troops: BaseTroop[]) => void;
+  protected onGameEndCallback?: (winner: 'red' | 'blue') => void;
 
   constructor() {
     this.gameState = {
@@ -243,7 +243,7 @@ export class GameEngine {
     }
   };
 
-  private update(deltaTime: number): void {
+  protected update(deltaTime: number): void {
     // Nettoyer les troupes mortes
     this.cleanupDeadTroops();
     
@@ -255,6 +255,9 @@ export class GameEngine {
       troop.update(deltaTime, activeTowers, flaggedCells, this);
     }
 
+    // Mettre à jour les tours (attaque des ennemis)
+    this.updateTowers(deltaTime);
+
     // Vérifier la fin de partie
     this.checkGameEnd();
 
@@ -264,11 +267,31 @@ export class GameEngine {
     }
   }
 
-  private cleanupDeadTroops(): void {
+  protected updateTowers(deltaTime: number): void {
+    const allTroops = this.getAllTroops();
+    const allTowers = this.getActiveTowersInternal();
+
+    for (const tower of this.towers.values()) {
+      // Mettre à jour le statut canAttack pour les tours du roi
+      tower.updateCanAttackStatus(allTowers);
+      
+      // Mettre à jour la tour (recherche de cibles et attaque)
+      tower.update(deltaTime, allTroops, allTowers, this);
+    }
+  }
+
+  protected cleanupDeadTroops(): void {
     const deadTroops = Array.from(this.troops.entries())
-      .filter(([, troop]) => !troop.data.isAlive)
+      .filter(([, troop]) => {
+        // Add safety check for data property
+        if (!troop || !troop.data) {
+          console.warn('Troop missing data property:', troop);
+          return false;
+        }
+        return !troop.data.isAlive;
+      })
       .map(([id, ]) => id);
-    
+
     for (const id of deadTroops) {
       this.troops.delete(id);
     }
@@ -278,12 +301,13 @@ export class GameEngine {
     // Vérifier si une King Tower est détruite
     const kingRed = this.towers.get('king_red');
     const kingBlue = this.towers.get('king_blue');
-    
-    if (kingRed && !kingRed.data.isAlive) {
+
+    // Add safety checks for tower data
+    if (kingRed && kingRed.data && !kingRed.data.isAlive) {
       // King Rouge détruite → Bleu gagne
       console.log('Game Over: Blue team wins! King Red destroyed');
       this.endGame('blue');
-    } else if (kingBlue && !kingBlue.data.isAlive) {
+    } else if (kingBlue && kingBlue.data && !kingBlue.data.isAlive) {
       // King Bleue détruite → Rouge gagne
       console.log('Game Over: Red team wins! King Blue destroyed');
       this.endGame('red');
@@ -329,7 +353,7 @@ export class GameEngine {
     let closestTarget: any = null;
     let closestDistance = Infinity;
 
-    // Vérifier les tours ennemies
+    // Vérifier les tours ennemies (toujours accessibles)
     activeTowers.forEach(tower => {
       if (tower.team !== troop.team) {
         const distance = Math.sqrt(
@@ -343,8 +367,24 @@ export class GameEngine {
       }
     });
 
-    // Vérifier les troupes ennemies
+    // Vérifier les troupes ennemies (avec restriction flying vs non-flying et côté de la rivière)
     enemyTroops.forEach(enemyTroop => {
+      // Non-flying troops cannot target flying troops
+      if (!troop.flying && enemyTroop.flying) {
+        return; // Skip flying troops for non-flying attackers
+      }
+      
+      // Pour les troupes non-volantes, vérifier qu'elles sont du même côté de la rivière
+      if (!troop.flying) {
+        const frontierRow = 16;
+        const troopSide = troop.position.row <= frontierRow ? 'top' : 'bottom';
+        const enemySide = enemyTroop.position.row <= frontierRow ? 'top' : 'bottom';
+        
+        if (troopSide !== enemySide) {
+          return; // Skip enemies on opposite side of river for non-flying troops
+        }
+      }
+      
       const distance = Math.sqrt(
         Math.pow(enemyTroop.position.row - troop.position.row, 2) +
         Math.pow(enemyTroop.position.col - troop.position.col, 2)

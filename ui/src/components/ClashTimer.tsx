@@ -1,26 +1,39 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function ClashTimer() {
-  const [timeLeft, setTimeLeft] = useState(171); // 2:51 in seconds
-  const [isRunning, setIsRunning] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(180); // 3:00 in seconds
+  const params = useSearchParams();
+  const gameId = params.get("game_id");
 
   useEffect(() => {
-    if (!isRunning || timeLeft <= 0) return;
+    if (!gameId) return;
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setIsRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Utiliser le temps du serveur au lieu d'un timer local
+    const updateTimer = async () => {
+      try {
+        const res = await fetch(`/api/game/${gameId}/state`);
+        const gameState = await res.json();
+        const serverTime = gameState.game_time || 0;
+        
+        // Calculer le temps restant (180 secondes - temps écoulé)
+        const remainingTime = Math.round(Math.max(0, 180 - serverTime));
+        setTimeLeft(remainingTime);
+      } catch (error) {
+        console.error("Failed to fetch game state for timer:", error);
+      }
+    };
 
-    return () => clearInterval(timer);
-  }, [isRunning, timeLeft]);
+    // Mettre à jour immédiatement
+    updateTimer();
+
+    // Poller toutes les 100ms pour une mise à jour fluide
+    const interval = setInterval(updateTimer, 100);
+
+    return () => clearInterval(interval);
+  }, [gameId]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

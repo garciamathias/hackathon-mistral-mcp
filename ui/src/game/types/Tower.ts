@@ -14,6 +14,11 @@ export interface Tower {
   isAlive: boolean;
   active: boolean;
   position: Position;
+  // Propriétés d'attaque
+  currentTarget?: string; // ID de la cible actuelle
+  lastAttackTime: number;
+  isAttacking: boolean;
+  canAttack: boolean; // Pour le roi : true si au moins une princess alliée est détruite
   // Propriétés d'affichage
   offsetX?: number;
   offsetY?: number;
@@ -40,7 +45,7 @@ export const TOWER_CONFIGS: Record<string, TowerConfig> = {
     maxHealth: 3_052, // Tours des princesses niveau 11
     damage: 109, // Dégâts par attaque
     attackSpeed: 136/109, // Attaques par seconde
-    range: 7.0 // Portée d'attaque
+    range: 10.0 // Portée d'attaque avec flèches
   }
 };
 
@@ -60,7 +65,12 @@ export class TowerEntity {
       maxHealth: config.maxHealth,
       isAlive: true,
       active: true,
-      position: { row, col }
+      position: { row, col },
+      // Propriétés d'attaque
+      currentTarget: undefined,
+      lastAttackTime: -1, // -1 pour permettre la première attaque immédiatement
+      isAttacking: false,
+      canAttack: type === 'princess' // Princess peut toujours attaquer, King seulement si princess détruite
     };
   }
 
@@ -89,5 +99,114 @@ export class TowerEntity {
       Math.pow(targetCol - this.data.col, 2)
     );
     return distance <= config.range;
+  }
+
+  public findTargetInRange(enemies: any[]): any | null {
+    if (!this.data.canAttack || !this.data.isAlive) return null;
+
+    const enemyTeam = this.data.team === 'red' ? 'blue' : 'red';
+    const enemiesInRange = enemies.filter(enemy => 
+      enemy.team === enemyTeam && 
+      enemy.isAlive && 
+      this.isInRange(enemy.position.row, enemy.position.col)
+    );
+
+    if (enemiesInRange.length === 0) return null;
+
+    // Trouver l'ennemi le plus proche
+    let closestEnemy = enemiesInRange[0];
+    let closestDistance = Math.sqrt(
+      Math.pow(closestEnemy.position.row - this.data.row, 2) +
+      Math.pow(closestEnemy.position.col - this.data.col, 2)
+    );
+
+    for (const enemy of enemiesInRange) {
+      const distance = Math.sqrt(
+        Math.pow(enemy.position.row - this.data.row, 2) +
+        Math.pow(enemy.position.col - this.data.col, 2)
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestEnemy = enemy;
+      }
+    }
+
+    return closestEnemy;
+  }
+
+  public update(deltaTime: number, enemies: any[], alliedTowers: any[], gameEngine?: any): void {
+    if (!this.data.isAlive) return;
+
+    // Mettre à jour canAttack pour le roi
+    if (this.data.type === 'king') {
+      const allyPrincessTowers = alliedTowers.filter(tower => 
+        tower.team === this.data.team && 
+        tower.type === 'princess'
+      );
+      const alivePrincessCount = allyPrincessTowers.filter(tower => tower.isAlive).length;
+      this.data.canAttack = alivePrincessCount < 2; // Peut attaquer si au moins une princess est détruite
+    }
+
+    if (!this.data.canAttack) return;
+
+    // Chercher une cible
+    const target = this.findTargetInRange(enemies);
+    
+    if (!target) {
+      this.data.currentTarget = undefined;
+      this.data.isAttacking = false;
+      return;
+    }
+
+    this.data.currentTarget = target.id;
+
+    // Vérifier si on peut attaquer (cooldown)
+    const currentTime = performance.now() / 1000;
+    const config = TOWER_CONFIGS[this.data.type];
+    const timeSinceLastAttack = currentTime - this.data.lastAttackTime;
+
+    if (timeSinceLastAttack >= config.attackSpeed) {
+      this.performAttack(target, gameEngine);
+      this.data.lastAttackTime = currentTime;
+      this.data.isAttacking = true;
+    }
+  }
+
+  private performAttack(target: any, gameEngine?: any): void {
+    const config = TOWER_CONFIGS[this.data.type];
+    console.log(`Tower ${this.data.id} (${this.data.type}) attacks ${target.id} for ${config.damage} damage!`);
+    
+    // Trouver l'entité de la troupe cible dans le GameEngine
+    if (gameEngine && gameEngine.getTroopEntity) {
+      const targetEntity = gameEngine.getTroopEntity(target.id);
+      if (targetEntity && typeof targetEntity.takeDamage === 'function') {
+        targetEntity.takeDamage(config.damage);
+        return;
+      }
+    }
+    
+    // Fallback vers les méthodes directes
+    if (target.takeDamage && typeof target.takeDamage === 'function') {
+      target.takeDamage(config.damage);
+    } else if (target.data && typeof target.data.takeDamage === 'function') {
+      target.data.takeDamage(config.damage);
+    } else {
+      console.warn(`Target ${target.id} doesn't have takeDamage method! Target type: ${typeof target}, Keys: ${Object.keys(target)}`);
+    }
+  }
+
+  public updateCanAttackStatus(alliedTowers: any[]): void {
+    if (this.data.type === 'king') {
+      const allyPrincessTowers = alliedTowers.filter(tower => 
+        tower.team === this.data.team && 
+        tower.type === 'princess'
+      );
+      const alivePrincessCount = allyPrincessTowers.filter(tower => tower.isAlive).length;
+      this.data.canAttack = alivePrincessCount < 2;
+      
+      if (this.data.canAttack) {
+        console.log(`King tower ${this.data.id} can now attack! Princess towers destroyed: ${2 - alivePrincessCount}`);
+      }
+    }
   }
 }
