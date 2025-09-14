@@ -40,19 +40,11 @@ export default function Home() {
           
           {/* Boutons de jeu */}
           <div className="absolute bottom-6 left-0 right-0 px-4">
-            <div className="space-y-3">
-              {/* Mode Local */}
-              <Button
-                onClick={handleLocalCombat}
-                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
-              >
-                🎮 Combat Local
-              </Button>
-
+            <div className="space-y-3 flex justify-center">
               {/* Mode Online */}
               <Button
                 onClick={handleOnlineCombat}
-                className="w-full bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-purple-300"
+                className="bg-gradient-to-r w-[85%] from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-11 px-4 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
               >
                 🌐 Combat Online
               </Button>
