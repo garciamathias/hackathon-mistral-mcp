@@ -258,7 +258,7 @@ export class MCPTools {
         }]
       };
     }
-
+ 
     // Validate position
     if (row < 0 || row > 33 || col < 0 || col > 17) {
       return {
