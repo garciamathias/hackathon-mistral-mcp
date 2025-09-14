@@ -147,7 +147,10 @@ export default function AIArena() {
     active: true,
     position: { row: tower.row, col: tower.col },
     offsetX: tower.offsetX,
-    offsetY: tower.offsetY
+    offsetY: tower.offsetY,
+    lastAttackTime: -1,
+    isAttacking: false,
+    canAttack: tower.type === 'princess'
   }));
 
   // Initialize towers in GameEngine

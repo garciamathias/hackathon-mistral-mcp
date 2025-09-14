@@ -195,7 +195,10 @@ export default function Arena() {
     active: true,
     position: { row: tower.row, col: tower.col },
     offsetX: tower.offsetX,
-    offsetY: tower.offsetY
+    offsetY: tower.offsetY,
+    lastAttackTime: -1,
+    isAttacking: false,
+    canAttack: tower.type === 'princess'
   }));
   
   // Initialiser les tours dans le GameEngine

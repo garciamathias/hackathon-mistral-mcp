@@ -255,12 +255,28 @@ export class GameEngine {
       troop.update(deltaTime, activeTowers, flaggedCells, this);
     }
 
+    // Mettre à jour les tours (attaque des ennemis)
+    this.updateTowers(deltaTime);
+
     // Vérifier la fin de partie
     this.checkGameEnd();
 
     // Notifier les composants React
     if (this.onUpdateCallback) {
       this.onUpdateCallback(this.getAllTroops());
+    }
+  }
+
+  protected updateTowers(deltaTime: number): void {
+    const allTroops = this.getAllTroops();
+    const allTowers = this.getActiveTowersInternal();
+
+    for (const tower of this.towers.values()) {
+      // Mettre à jour le statut canAttack pour les tours du roi
+      tower.updateCanAttackStatus(allTowers);
+      
+      // Mettre à jour la tour (recherche de cibles et attaque)
+      tower.update(deltaTime, allTroops, allTowers, this);
     }
   }
 
