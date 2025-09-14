@@ -1,15 +1,26 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useGameEngine } from "@/game/useGameEngine";
+import { useOnlineGame } from "@/hooks/useOnlineGame";
+
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
-import { useSearchParams, useRouter } from "next/navigation";
-import { GameState } from "@/lib/gameStore";
+import { gameEngine } from "@/game/GameEngine";
+import { GameStatus } from "@/types/backend";
 
-export default function Arena() {
+function ArenaContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isOnlineMode = searchParams.get('mode') === 'online';
+  const [onlineMatchId, setOnlineMatchId] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+
   const showGrid = false;
   const numRows = 34;
   const numCols = 18;
@@ -59,14 +70,112 @@ export default function Arena() {
     }
   }), []);
 
-  // Si pas d'ID -> retour au menu
-  useEffect(() => {
-    if (!gameId) router.replace("/");
-  }, [gameId, router]);
+  // Convertir TOWER en format compatible avec le moteur de jeu
+  const towersForGame = Object.values(TOWER).map(tower => ({
+    id: tower.id,
+    type: tower.type as 'king' | 'princess',
+    team: tower.team as 'red' | 'blue',
+    row: tower.row,
+    col: tower.col,
+    health: tower.type === 'king' ? 4824 : 3052,
+    maxHealth: tower.type === 'king' ? 4824 : 3052,
+    isAlive: true,
+    active: true,
+    position: { row: tower.row, col: tower.col },
+    offsetX: tower.offsetX,
+    offsetY: tower.offsetY
+  }));
+  
+  // Local game hook
+  const localGame = useGameEngine(towersForGame, undefined);
 
-  // Poller l'état du jeu
+  // Online game hook
+  const onlineGame = useOnlineGame();
+
+  // Initialize online game if in online mode
   useEffect(() => {
-    if (!gameId) return;
+    if (isOnlineMode) {
+      const matchId = sessionStorage.getItem('matchId');
+      const isHost = sessionStorage.getItem('isHost') === 'true';
+      const playerTeam = sessionStorage.getItem('playerTeam') as 'red' | 'blue' | null;
+
+      if (matchId) {
+        setOnlineMatchId(matchId);
+        setIsConnecting(true);
+
+        // Connect to the match
+        if (isHost) {
+          onlineGame.createMatch().then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to create match');
+              router.push('/lobby');
+            }
+          });
+        } else {
+          onlineGame.joinMatch(matchId).then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to join match');
+              router.push('/lobby');
+            } else if (playerTeam) {
+              setCurrentTeam(playerTeam);
+            }
+          });
+        }
+      } else {
+        // No match ID, redirect to lobby
+        router.push('/lobby');
+      }
+    } else {
+      // Local mode - Initialize towers in GameEngine
+      Object.values(TOWER).forEach(tower => {
+        gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
+      });
+    }
+
+    return () => {
+      if (isOnlineMode) {
+        onlineGame.disconnect();
+      } else {
+        // Clean up towers on component destroy
+        Object.values(TOWER).forEach(tower => {
+          gameEngine.removeTower(tower.id);
+        });
+      }
+    };
+  }, [isOnlineMode]);
+
+  // Use appropriate game based on mode
+  const game = isOnlineMode ? onlineGame : localGame;
+  const troops = game.troops;
+  const gameEngineTowers = isOnlineMode ? game.towers : localGame.towers;
+  const spawnTroop = isOnlineMode
+    ? (type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+        // In online mode, only allow spawning for player's team
+        if (team === onlineGame.playerTeam) {
+          onlineGame.spawnTroop(type, team, row, col);
+        }
+      }
+    : localGame.spawnTroop;
+  const startGame = isOnlineMode ? () => {} : localGame.startGame; // Online games start automatically
+  const pauseGame = isOnlineMode ? onlineGame.pauseGame : localGame.pauseGame;
+  const resumeGame = isOnlineMode ? onlineGame.resumeGame : localGame.resumeGame;
+  const stopGame = isOnlineMode ? onlineGame.disconnect : localGame.stopGame;
+  const resetGame = isOnlineMode ? () => router.push('/lobby') : localGame.resetGame;
+  const isGameRunning = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.IN_PROGRESS
+    : localGame.isGameRunning;
+  const isGamePaused = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.PAUSED
+    : localGame.isGamePaused;
+  const gameEnded = isOnlineMode ? onlineGame.gameEnded : localGame.gameEnded;
+  const winner = isOnlineMode ? onlineGame.winner : localGame.winner;
+
+  // Fonction pour obtenir toutes les cellules marquées des tours actives
+  const getActiveTowersFlaggedCells = React.useCallback(() => {
+    const flaggedCells = new Set<string>();
+
     
     const interval = setInterval(async () => {
       try {
@@ -333,30 +442,113 @@ export default function Arena() {
         </div>
       </div>
 
-      {/* Contrôles */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
-        <Button
-          variant="secondary"
-          className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
-            currentTeam === 'red' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}
-          onClick={switchTeam}
-        >
-          Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
-        </Button>
+        {/* Contrôles du jeu */}
+        <div className="absolute top-4 left-4 z-10 space-y-2">
+          {/* Online Mode Indicator */}
+          {isOnlineMode && (
+            <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  onlineGame.isConnected ? 'bg-green-500' :
+                  isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                }`} />
+                <span className="text-white text-sm font-semibold">
+                  {onlineGame.isConnected ? 'Connected' :
+                   isConnecting ? 'Connecting...' : 'Disconnected'}
+                </span>
+              </div>
+              {onlineGame.playerTeam && (
+                <div className="text-xs text-gray-300">
+                  <p>Team: <span className={`font-bold ${
+                    onlineGame.playerTeam === 'red' ? 'text-red-400' : 'text-blue-400'
+                  }`}>{onlineGame.playerTeam.toUpperCase()}</span></p>
+                  <p>Match: {onlineMatchId?.substring(0, 8)}</p>
+                  <p>Elixir: {Math.floor(onlineGame.playerElixir)}/{10}</p>
+                </div>
+              )}
+              <Button
+                onClick={() => {
+                  onlineGame.disconnect();
+                  router.push('/lobby');
+                }}
+                variant="destructive"
+                size="sm"
+                className="w-full mt-2"
+              >
+                Leave Match
+              </Button>
+            </div>
+          )}
 
-        <div className="text-center">
-          <div className="bg-black/50 rounded-lg p-3 border border-white/20">
-            <p className="text-white text-sm font-medium">
-              Drag cards from the bottom to spawn {currentTeam} troops
-            </p>
-            <p className="text-gray-300 text-xs mt-1">Switch team with the button above</p>
-            <p className="text-yellow-400 text-xs mt-1">
-              Elixir: {currentTeam === 'red' ? gameState.elixir.red : gameState.elixir.blue}/10
-            </p>
+          {/* Bouton pour switcher d'équipe (local mode only) */}
+          {!isOnlineMode && (
+          <Button
+            variant="secondary"
+            className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
+              currentTeam === 'red' 
+                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+            onClick={switchTeam}
+          >
+            Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
+          </Button>
+          )}
+
+          {/* Contrôles de jeu */}
+          <div className="space-x-2">
+            {!isGameRunning ? (
+              <Button 
+                variant="secondary" 
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                onClick={startGame}
+              >
+                Start Game
+              </Button>
+            ) : (
+              <>
+                {isGamePaused ? (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={resumeGame}
+                  >
+                    Resume
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={pauseGame}
+                  >
+                    Pause
+                  </Button>
+                )}
+                <Button 
+                  variant="secondary" 
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                  onClick={stopGame}
+                >
+                  Stop
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrapper component with Suspense for Next.js
+export default function Arena() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-white text-2xl animate-pulse">Loading Arena...</div>
+      </div>
+    }>
+      <ArenaContent />
+    </Suspense>
   );
 }
