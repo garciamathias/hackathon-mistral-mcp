@@ -310,10 +310,19 @@ function ArenaContent() {
   const gameTowers = isOnlineMode ?
     Object.values(TOWER).reduce((acc, tower) => {
       const engineTower = gameEngineTowers.find(t => t.id === tower.id);
-      return {
-        ...acc,
-        [tower.id]: engineTower || { health: tower.type === 'king' ? 4824 : 3052, max_health: tower.type === 'king' ? 4824 : 3052 }
-      };
+      // Only include tower data if it exists in the engine
+      if (engineTower) {
+        return {
+          ...acc,
+          [tower.id]: {
+            health: engineTower.health,
+            max_health: engineTower.maxHealth, // Use camelCase for consistency
+            isAlive: engineTower.isAlive,
+            active: engineTower.active
+          }
+        };
+      }
+      return acc;
     }, {} as any) :
     gameState?.towers;
 
@@ -360,8 +369,10 @@ function ArenaContent() {
                   
                   {shouldShowTower && (() => {
                     const engineTower = gameTowers?.[tower!.id];
-                    const dead = engineTower && engineTower.health <= 0;
-                    if (dead) return null;
+                    // Check if tower exists and is alive
+                    if (!engineTower || engineTower.health <= 0 || !engineTower.isAlive) {
+                      return null; // Don't show destroyed towers
+                    }
 
                     return (
                       <>
@@ -382,12 +393,11 @@ function ArenaContent() {
                             }px`,
                           }}
                         >
-                          {(() => {
-                            const t = engineTower;
-                            const currentHealth = t?.health || ((tower as any).type === 'king' ? 4825 : 3052);
-                            const maxHealth = t?.max_health || ((tower as any).type === 'king' ? 4825 : 3052);
-                            return <TowerHealthBar currentHealth={currentHealth} maxHealth={maxHealth} team={(tower as any).team} />;
-                          })()}
+                          <TowerHealthBar
+                            currentHealth={engineTower.health}
+                            maxHealth={engineTower.max_health}
+                            team={(tower as any).team}
+                          />
                         </div>
                       </>
                     );

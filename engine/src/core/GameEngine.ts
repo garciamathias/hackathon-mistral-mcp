@@ -34,15 +34,15 @@ export class GameEngine {
   }
 
   private initializeTowers(): void {
-    // Red team towers
-    this.createTower('red_king', TowerType.KING, 'red', TOWER_POSITIONS.red.king);
-    this.createTower('red_princess_left', TowerType.PRINCESS, 'red', TOWER_POSITIONS.red.princessLeft);
-    this.createTower('red_princess_right', TowerType.PRINCESS, 'red', TOWER_POSITIONS.red.princessRight);
+    // Red team towers - use frontend IDs
+    this.createTower('king_red', TowerType.KING, 'red', TOWER_POSITIONS.red.king);
+    this.createTower('princess_red_left', TowerType.PRINCESS, 'red', TOWER_POSITIONS.red.princessLeft);
+    this.createTower('princess_red_right', TowerType.PRINCESS, 'red', TOWER_POSITIONS.red.princessRight);
 
-    // Blue team towers
-    this.createTower('blue_king', TowerType.KING, 'blue', TOWER_POSITIONS.blue.king);
-    this.createTower('blue_princess_left', TowerType.PRINCESS, 'blue', TOWER_POSITIONS.blue.princessLeft);
-    this.createTower('blue_princess_right', TowerType.PRINCESS, 'blue', TOWER_POSITIONS.blue.princessRight);
+    // Blue team towers - use frontend IDs
+    this.createTower('king_blue', TowerType.KING, 'blue', TOWER_POSITIONS.blue.king);
+    this.createTower('princess_blue_left', TowerType.PRINCESS, 'blue', TOWER_POSITIONS.blue.princessLeft);
+    this.createTower('princess_blue_right', TowerType.PRINCESS, 'blue', TOWER_POSITIONS.blue.princessRight);
   }
 
   private createTower(id: string, type: TowerType, team: 'red' | 'blue', position: Position): void {
