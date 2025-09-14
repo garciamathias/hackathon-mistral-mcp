@@ -2,7 +2,8 @@ import {
   WSMessage,
   WSMessageType,
   GameSnapshot,
-  PlayCardData
+  PlayCardData,
+  EmoteEventData
 } from '@/types/backend';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -12,6 +13,7 @@ export interface WebSocketOptions {
   onStatusChange?: (status: ConnectionStatus) => void;
   onError?: (error: Error) => void;
   onMessage?: (message: WSMessage) => void;
+  onEmote?: (emoteData: EmoteEventData) => void;
 }
 
 export class WebSocketClient {
@@ -98,6 +100,12 @@ export class WebSocketClient {
 
       case WSMessageType.PONG:
         // Heartbeat response received
+        break;
+
+      case WSMessageType.EMOTE_EVENT:
+        if (message.data) {
+          this.options.onEmote?.(message.data as EmoteEventData);
+        }
         break;
 
       default:

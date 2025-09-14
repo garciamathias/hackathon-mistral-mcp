@@ -119,6 +119,30 @@ export const getMCPServer = (gameManager: MCPGameManager): any => {
     },
   );
 
+  // Trigger Emote Tool
+  server.tool(
+    "trigger_emote",
+    "Trigger an emote for the red king (only available for AI-controlled red team)",
+    {
+      match_id: z.string().describe("ID of the match"),
+      emote_type: z.enum(["haha", "cry", "mumumu"])
+        .describe("Type of emote to trigger"),
+      session_id: z.string().optional().describe("Optional session ID to maintain context"),
+    },
+    async ({ match_id, emote_type, session_id }: { match_id: string; emote_type: 'haha' | 'cry' | 'mumumu'; session_id?: string }): Promise<CallToolResult> => {
+      const result = gameManager.triggerEmote(match_id, emote_type, session_id);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
   // List Available Games Tool
   server.tool(
     "list_games",

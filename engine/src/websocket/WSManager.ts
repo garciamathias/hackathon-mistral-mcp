@@ -5,7 +5,8 @@ import {
   WSMessage,
   WSMessageType,
   WSErrorMessage,
-  WSSnapshotMessage
+  WSSnapshotMessage,
+  WSEmoteMessage
 } from '@/types/server';
 import { GameRoom } from '@core/GameRoom';
 import { GameSnapshot, PlayCardAction } from '@shared/game';
@@ -205,6 +206,11 @@ export class WSManager {
       this.broadcastToRoom(room.id, snapshot);
     });
 
+    // Setup emote broadcasting
+    room.onEmote((playerId, team, emoteType) => {
+      this.sendEmoteEvent(room.id, playerId, team, emoteType);
+    });
+
     console.log(`Created room ${room.id}`);
     return room;
   }
@@ -241,6 +247,31 @@ export class WSManager {
       data: { snapshot }
     };
     this.sendMessage(ws, message);
+  }
+
+  public sendEmoteEvent(roomId: string, playerId: string, team: 'red' | 'blue', emoteType: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    const message: WSEmoteMessage = {
+      type: WSMessageType.EMOTE_EVENT,
+      timestamp: Date.now(),
+      data: {
+        playerId,
+        team,
+        emoteType,
+        // Position will be calculated on the frontend based on the king tower location
+        position: team === 'red' ? { x: 12, y: 2 } : { x: 12, y: 31 }
+      }
+    };
+
+    // Broadcast to all clients in the room
+    const clients = room.getClients();
+    for (const client of clients) {
+      if (client.ws.readyState === WebSocket.OPEN) {
+        this.sendMessage(client.ws, message);
+      }
+    }
   }
 
   private sendError(ws: WebSocket, code: string, message: string): void {

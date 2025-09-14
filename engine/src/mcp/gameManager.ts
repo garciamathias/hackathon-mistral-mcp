@@ -5,7 +5,8 @@ import {
   CreateGameResponse,
   JoinGameResponse,
   GameStatusResponse,
-  SpawnTroopResponse
+  SpawnTroopResponse,
+  TriggerEmoteResponse
 } from './types';
 
 export class MCPGameManager {
@@ -331,6 +332,86 @@ export class MCPGameManager {
       troopId: `troop_${uuidv4().substring(0, 8)}`,
       message: `${troopType} deployed at position (${row}, ${col})`,
       elixirRemaining: Math.floor(player.elixir - cost)
+    };
+  }
+
+  // Track last emote times for cooldown
+  private lastEmoteTimes: Map<string, number> = new Map();
+  private EMOTE_COOLDOWN = 3000; // 3 seconds in milliseconds
+
+  public triggerEmote(
+    matchId: string,
+    emoteType: string,
+    sessionId?: string
+  ): TriggerEmoteResponse {
+    const room = this.wsManager.getRoom(matchId);
+
+    if (!room) {
+      return {
+        success: false,
+        message: 'Game not found'
+      };
+    }
+
+    // Get session to know which player is triggering the emote
+    let session = sessionId ? this.sessions.get(sessionId) : null;
+
+    // Find the MCP player in the room
+    if (!session) {
+      const roomInfo = room.getRoomInfo();
+      const mcpPlayer = roomInfo.players.find(p => p.id.startsWith('mcp_'));
+
+      if (mcpPlayer) {
+        session = {
+          sessionId: sessionId || `auto_${Date.now()}`,
+          playerId: mcpPlayer.id,
+          playerName: mcpPlayer.name,
+          team: mcpPlayer.team,
+          currentMatchId: matchId,
+          createdAt: Date.now(),
+          lastActivity: Date.now()
+        };
+        this.sessions.set(session.sessionId, session);
+      } else {
+        return {
+          success: false,
+          message: 'No MCP player found in the game'
+        };
+      }
+    }
+
+    // Only allow red team (AI-controlled) to use emotes
+    if (session.team !== 'red') {
+      return {
+        success: false,
+        message: 'Only the red team (AI) can trigger emotes'
+      };
+    }
+
+    // Check cooldown
+    const now = Date.now();
+    const lastEmoteTime = this.lastEmoteTimes.get(session.playerId) || 0;
+    const timeSinceLastEmote = now - lastEmoteTime;
+
+    if (timeSinceLastEmote < this.EMOTE_COOLDOWN) {
+      const cooldownRemaining = Math.ceil((this.EMOTE_COOLDOWN - timeSinceLastEmote) / 1000);
+      return {
+        success: false,
+        message: `Emote on cooldown. Please wait ${cooldownRemaining} seconds`,
+        cooldownRemaining
+      };
+    }
+
+    // Update last emote time
+    this.lastEmoteTimes.set(session.playerId, now);
+
+    // Trigger the emote via the room
+    room.triggerEmote(session.playerId, session.team, emoteType);
+
+    return {
+      success: true,
+      message: `Emote '${emoteType}' triggered successfully`,
+      emoteType
     };
   }
 

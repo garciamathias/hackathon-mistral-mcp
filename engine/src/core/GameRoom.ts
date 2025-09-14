@@ -19,6 +19,7 @@ export class GameRoom {
   private players: Map<string, PlayerState> = new Map();
   private maxPlayers: number;
   private onSnapshotCallback?: (snapshot: GameSnapshot) => void;
+  private onEmoteCallback?: (playerId: string, team: 'red' | 'blue', emoteType: string) => void;
   private inputQueue: PlayCardAction[] = [];
   private roomCreatedAt: number;
   private gameStartedAt?: number;
@@ -253,6 +254,31 @@ export class GameRoom {
 
     this.tickManager.resume();
     console.log(`Game resumed in room ${this.id}`);
+  }
+
+  public triggerEmote(playerId: string, team: 'red' | 'blue', emoteType: string): void {
+    // Validate player exists
+    const player = this.players.get(playerId);
+    if (!player) {
+      console.log(`[GameRoom] Player ${playerId} not found for emote`);
+      return;
+    }
+
+    // Only allow red team to trigger emotes (AI-controlled)
+    if (team !== 'red') {
+      console.log(`[GameRoom] Only red team can trigger emotes`);
+      return;
+    }
+
+    // Trigger the emote callback if set
+    if (this.onEmoteCallback) {
+      this.onEmoteCallback(playerId, team, emoteType);
+      console.log(`[GameRoom] Emote '${emoteType}' triggered by ${playerId} (${team} team)`);
+    }
+  }
+
+  public onEmote(callback: (playerId: string, team: 'red' | 'blue', emoteType: string) => void): void {
+    this.onEmoteCallback = callback;
   }
 
   private handleGameEnd(): void {

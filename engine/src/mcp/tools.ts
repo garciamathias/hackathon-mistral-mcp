@@ -94,6 +94,27 @@ export class MCPTools {
         required: ['matchId', 'troopType', 'row', 'col']
       }
     });
+
+    // Tool 5: Trigger Emote
+    this.tools.push({
+      name: 'trigger_emote',
+      description: 'Trigger an emote for the red king (only available for AI-controlled red team)',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          matchId: {
+            type: 'string',
+            description: 'The ID of the match'
+          },
+          emoteType: {
+            type: 'string',
+            enum: ['haha', 'cry', 'mumumu'],
+            description: 'Type of emote to trigger'
+          }
+        },
+        required: ['matchId', 'emoteType']
+      }
+    });
   }
 
   public getTools(): MCPTool[] {
@@ -114,6 +135,9 @@ export class MCPTools {
 
         case 'spawn_troop':
           return this.handleSpawnTroop(args, sessionId);
+
+        case 'trigger_emote':
+          return this.handleTriggerEmote(args, sessionId);
 
         default:
           return {
@@ -248,6 +272,43 @@ export class MCPTools {
     }
 
     const result = this.gameManager.spawnTroop(matchId, troopType, row, col, sessionId);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  }
+
+  private async handleTriggerEmote(args: any, sessionId?: string): Promise<MCPToolResult> {
+    const { matchId, emoteType } = args;
+
+    if (!matchId || !emoteType) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'matchId and emoteType are required'
+          })
+        }]
+      };
+    }
+
+    // Validate emote type
+    const validEmotes = ['haha', 'cry', 'mumumu'];
+    if (!validEmotes.includes(emoteType)) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: `Invalid emoteType. Must be one of: ${validEmotes.join(', ')}`
+          })
+        }]
+      };
+    }
+
+    const result = this.gameManager.triggerEmote(matchId, emoteType, sessionId);
 
     return {
       content: [{

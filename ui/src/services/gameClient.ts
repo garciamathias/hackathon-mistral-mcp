@@ -7,13 +7,15 @@ import {
   TroopData,
   TowerData,
   CreateMatchResponse,
-  JoinMatchResponse
+  JoinMatchResponse,
+  EmoteEventData
 } from '@/types/backend';
 
 export interface GameClientOptions {
   onSnapshot?: (snapshot: GameSnapshot) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
   onGameEnd?: (winner: 'red' | 'blue' | 'draw') => void;
+  onEmote?: (emoteData: EmoteEventData) => void;
   onError?: (error: Error) => void;
 }
 
@@ -31,6 +33,7 @@ export class GameClient {
     this.wsClient = new WebSocketClient({
       onSnapshot: (snapshot) => this.handleSnapshot(snapshot),
       onStatusChange: (status) => this.options.onStatusChange?.(status),
+      onEmote: (emoteData) => this.options.onEmote?.(emoteData),
       onError: (error) => this.options.onError?.(error),
     });
   }

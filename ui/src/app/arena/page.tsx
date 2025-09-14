@@ -9,6 +9,7 @@ import { useOnlineGame } from "@/hooks/useOnlineGame";
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
+import Emote from "@/components/Emote";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
 import { GameStatus } from "@/types/backend";
@@ -189,6 +190,7 @@ function ArenaContent() {
     : localGame.isGamePaused;
   const gameEnded = isOnlineMode ? onlineGame.gameEnded : localGame.gameEnded;
   const winner = isOnlineMode ? onlineGame.winner : localGame.winner;
+  const currentEmote = isOnlineMode ? onlineGame.currentEmote : null;
 
   // Fetch game state for local mode only
   React.useEffect(() => {
@@ -520,6 +522,18 @@ function ArenaContent() {
             isOnlineMode={isOnlineMode}
           />
         </div>
+
+        {/* Emote display for red king */}
+        {currentEmote && currentEmote.team === 'red' && (
+          <Emote
+            type={currentEmote.emoteType}
+            position={{
+              x: (10 * (window.innerWidth * 0.8 / numCols)) + (window.innerWidth * 0.1), // col 10
+              y: (1 * (window.innerHeight * 0.38 / numRows)) + (window.innerHeight * 0.278) // row 1
+            }}
+            onComplete={() => {}}
+          />
+        )}
 
         {/* Affichage de l'élixir en bas à gauche */}
          <div className="absolute bottom-[1.1%] left-[8.9%] z-15">

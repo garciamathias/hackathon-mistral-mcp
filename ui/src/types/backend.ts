@@ -139,6 +139,7 @@ export enum WSMessageType {
   ROOM_LEFT = 'ROOM_LEFT',
   GAME_SNAPSHOT = 'GAME_SNAPSHOT',
   GAME_EVENT = 'GAME_EVENT',
+  EMOTE_EVENT = 'EMOTE_EVENT',
   ERROR = 'ERROR',
   PONG = 'PONG'
 }
@@ -152,4 +153,11 @@ export interface WSMessage {
 export interface PlayCardData {
   troopType: string;
   position: Position;
+}
+
+export interface EmoteEventData {
+  playerId: string;
+  team: 'red' | 'blue';
+  emoteType: 'haha' | 'cry' | 'mumumu';
+  position?: { x: number; y: number };
 }

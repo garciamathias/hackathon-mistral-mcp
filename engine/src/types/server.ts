@@ -51,6 +51,7 @@ export enum WSMessageType {
   ROOM_LEFT = 'ROOM_LEFT',
   GAME_SNAPSHOT = 'GAME_SNAPSHOT',
   GAME_EVENT = 'GAME_EVENT',
+  EMOTE_EVENT = 'EMOTE_EVENT',
   ERROR = 'ERROR',
   PONG = 'PONG'
 }
@@ -73,6 +74,16 @@ export interface WSSnapshotMessage extends WSMessage {
   type: WSMessageType.GAME_SNAPSHOT;
   data: {
     snapshot: any;
+  };
+}
+
+export interface WSEmoteMessage extends WSMessage {
+  type: WSMessageType.EMOTE_EVENT;
+  data: {
+    playerId: string;
+    team: 'red' | 'blue';
+    emoteType: string;
+    position?: { x: number; y: number };
   };
 }
 

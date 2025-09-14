@@ -6,7 +6,8 @@ import {
   GameStatus,
   TroopData,
   TowerData,
-  PlayerState
+  PlayerState,
+  EmoteEventData
 } from '@/types/backend';
 import { BaseTroop, TroopType } from '@/game/types/Troop';
 import { Tower } from '@/game/types/Tower';
@@ -32,6 +33,9 @@ export interface OnlineGameHookReturn {
   gameTime: number;
   gameEnded: boolean;
   winner: 'red' | 'blue' | 'draw' | null;
+
+  // Emotes
+  currentEmote: EmoteEventData | null;
 
   // Actions
   createMatch: () => Promise<boolean>;
@@ -60,6 +64,7 @@ export const useOnlineGame = (): OnlineGameHookReturn => {
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [gameEnded, setGameEnded] = useState(false);
   const [winner, setWinner] = useState<'red' | 'blue' | 'draw' | null>(null);
+  const [currentEmote, setCurrentEmote] = useState<EmoteEventData | null>(null);
   const gameClientRef = useRef<GameClient | null>(null);
 
   // Initialize game client
@@ -75,6 +80,11 @@ export const useOnlineGame = (): OnlineGameHookReturn => {
         onGameEnd: (gameWinner) => {
           setGameEnded(true);
           setWinner(gameWinner);
+        },
+        onEmote: (emoteData) => {
+          setCurrentEmote(emoteData);
+          // Auto clear after 3 seconds
+          setTimeout(() => setCurrentEmote(null), 3000);
         },
         onError: (error) => {
           console.error('Game client error:', error);
@@ -221,6 +231,9 @@ export const useOnlineGame = (): OnlineGameHookReturn => {
     gameTime: snapshot?.gameTime || 0,
     gameEnded,
     winner,
+
+    // Emotes
+    currentEmote,
 
     // Actions
     createMatch,
