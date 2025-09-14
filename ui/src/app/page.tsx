@@ -1,14 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import TransitionScreen from "@/components/TransitionScreen";
 
 export default function Home() {
   const [showTransition, setShowTransition] = useState(false);
+  const [gameMode, setGameMode] = useState<'local' | 'online' | null>(null);
+  const router = useRouter();
 
-  const handleCombatClick = () => {
+  const handleLocalCombat = () => {
+    setGameMode('local');
     setShowTransition(true);
+  };
+
+  const handleOnlineCombat = () => {
+    router.push('/lobby');
   };
 
   return (
@@ -29,22 +37,36 @@ export default function Home() {
             className="w-full h-full object-cover"
           />
           
-          {/* Bouton jouer stylisé */}
-          <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center">
-            <Button 
-              onClick={handleCombatClick}
-              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-10 px-7 rounded-2xl text-2xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
-            >
-              Combat
-            </Button>
+          {/* Boutons de jeu */}
+          <div className="absolute bottom-6 left-0 right-0 px-4">
+            <div className="space-y-3">
+              {/* Mode Local */}
+              <Button
+                onClick={handleLocalCombat}
+                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
+              >
+                🎮 Combat Local
+              </Button>
+
+              {/* Mode Online */}
+              <Button
+                onClick={handleOnlineCombat}
+                className="w-full bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-purple-300"
+              >
+                🌐 Combat Online
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Écran de transition */}
-      {showTransition && (
-        <TransitionScreen 
-          onTransitionComplete={() => setShowTransition(false)}
+      {showTransition && gameMode === 'local' && (
+        <TransitionScreen
+          onTransitionComplete={() => {
+            setShowTransition(false);
+            router.push('/arena?mode=local');
+          }}
         />
       )}
     </>

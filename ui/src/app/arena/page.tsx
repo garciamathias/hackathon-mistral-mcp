@@ -1,15 +1,24 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useGameEngine } from "@/game/useGameEngine";
+import { useOnlineGame } from "@/hooks/useOnlineGame";
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
 import { gameEngine } from "@/game/GameEngine";
+import { GameStatus } from "@/types/backend";
 
-export default function Arena() {
+function ArenaContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isOnlineMode = searchParams.get('mode') === 'online';
+  const [onlineMatchId, setOnlineMatchId] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
   const showGrid = false;
 
   const numRows = 34;
@@ -198,36 +207,91 @@ export default function Arena() {
     offsetY: tower.offsetY
   }));
   
-  // Initialiser les tours dans le GameEngine
-  React.useEffect(() => {
-    // Ajouter toutes les tours au GameEngine
-    Object.values(TOWER).forEach(tower => {
-      gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
-    });
-    
-    return () => {
-      // Nettoyer les tours à la destruction du composant
+  // Local game hook
+  const localGame = useGameEngine(towersForGame, undefined);
+
+  // Online game hook
+  const onlineGame = useOnlineGame();
+
+  // Initialize online game if in online mode
+  useEffect(() => {
+    if (isOnlineMode) {
+      const matchId = sessionStorage.getItem('matchId');
+      const isHost = sessionStorage.getItem('isHost') === 'true';
+      const playerTeam = sessionStorage.getItem('playerTeam') as 'red' | 'blue' | null;
+
+      if (matchId) {
+        setOnlineMatchId(matchId);
+        setIsConnecting(true);
+
+        // Connect to the match
+        if (isHost) {
+          onlineGame.createMatch().then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to create match');
+              router.push('/lobby');
+            }
+          });
+        } else {
+          onlineGame.joinMatch(matchId).then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to join match');
+              router.push('/lobby');
+            } else if (playerTeam) {
+              setCurrentTeam(playerTeam);
+            }
+          });
+        }
+      } else {
+        // No match ID, redirect to lobby
+        router.push('/lobby');
+      }
+    } else {
+      // Local mode - Initialize towers in GameEngine
       Object.values(TOWER).forEach(tower => {
-        gameEngine.removeTower(tower.id);
+        gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
       });
+    }
+
+    return () => {
+      if (isOnlineMode) {
+        onlineGame.disconnect();
+      } else {
+        // Clean up towers on component destroy
+        Object.values(TOWER).forEach(tower => {
+          gameEngine.removeTower(tower.id);
+        });
+      }
     };
-  }, [TOWER]);
-  
-  // Hook du moteur de jeu
-  const { 
-    troops,
-    towers: gameEngineTowers,
-    spawnTroop,
-    startGame, 
-    pauseGame, 
-    resumeGame, 
-    stopGame,
-    resetGame,
-    isGameRunning,
-    isGamePaused,
-    gameEnded,
-    winner
-  } = useGameEngine(towersForGame, undefined);
+  }, [isOnlineMode]);
+
+  // Use appropriate game based on mode
+  const game = isOnlineMode ? onlineGame : localGame;
+  const troops = game.troops;
+  const gameEngineTowers = isOnlineMode ? game.towers : localGame.towers;
+  const spawnTroop = isOnlineMode
+    ? (type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+        // In online mode, only allow spawning for player's team
+        if (team === onlineGame.playerTeam) {
+          onlineGame.spawnTroop(type, team, row, col);
+        }
+      }
+    : localGame.spawnTroop;
+  const startGame = isOnlineMode ? () => {} : localGame.startGame; // Online games start automatically
+  const pauseGame = isOnlineMode ? onlineGame.pauseGame : localGame.pauseGame;
+  const resumeGame = isOnlineMode ? onlineGame.resumeGame : localGame.resumeGame;
+  const stopGame = isOnlineMode ? onlineGame.disconnect : localGame.stopGame;
+  const resetGame = isOnlineMode ? () => router.push('/lobby') : localGame.resetGame;
+  const isGameRunning = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.IN_PROGRESS
+    : localGame.isGameRunning;
+  const isGamePaused = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.PAUSED
+    : localGame.isGamePaused;
+  const gameEnded = isOnlineMode ? onlineGame.gameEnded : localGame.gameEnded;
+  const winner = isOnlineMode ? onlineGame.winner : localGame.winner;
 
   // Fonction pour obtenir toutes les cellules marquées des tours actives
   const getActiveTowersFlaggedCells = React.useCallback(() => {
@@ -574,9 +638,46 @@ export default function Arena() {
 
         {/* Contrôles du jeu */}
         <div className="absolute top-4 left-4 z-10 space-y-2">
-          {/* Bouton pour switcher d'équipe */}
-          <Button 
-            variant="secondary" 
+          {/* Online Mode Indicator */}
+          {isOnlineMode && (
+            <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  onlineGame.isConnected ? 'bg-green-500' :
+                  isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                }`} />
+                <span className="text-white text-sm font-semibold">
+                  {onlineGame.isConnected ? 'Connected' :
+                   isConnecting ? 'Connecting...' : 'Disconnected'}
+                </span>
+              </div>
+              {onlineGame.playerTeam && (
+                <div className="text-xs text-gray-300">
+                  <p>Team: <span className={`font-bold ${
+                    onlineGame.playerTeam === 'red' ? 'text-red-400' : 'text-blue-400'
+                  }`}>{onlineGame.playerTeam.toUpperCase()}</span></p>
+                  <p>Match: {onlineMatchId?.substring(0, 8)}</p>
+                  <p>Elixir: {Math.floor(onlineGame.playerElixir)}/{10}</p>
+                </div>
+              )}
+              <Button
+                onClick={() => {
+                  onlineGame.disconnect();
+                  router.push('/lobby');
+                }}
+                variant="destructive"
+                size="sm"
+                className="w-full mt-2"
+              >
+                Leave Match
+              </Button>
+            </div>
+          )}
+
+          {/* Bouton pour switcher d'équipe (local mode only) */}
+          {!isOnlineMode && (
+          <Button
+            variant="secondary"
             className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
               currentTeam === 'red' 
                 ? 'bg-red-600 hover:bg-red-700 text-white' 
@@ -586,7 +687,8 @@ export default function Arena() {
           >
             Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
           </Button>
-          
+          )}
+
           {/* Contrôles de jeu */}
           <div className="space-x-2">
             {!isGameRunning ? (
@@ -642,5 +744,18 @@ export default function Arena() {
             )}
         </div>
       </div>
+  );
+}
+
+// Wrapper component with Suspense for Next.js
+export default function Arena() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-white text-2xl animate-pulse">Loading Arena...</div>
+      </div>
+    }>
+      <ArenaContent />
+    </Suspense>
   );
 }
