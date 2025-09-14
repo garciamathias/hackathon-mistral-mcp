@@ -34,12 +34,33 @@ if __name__ == "__main__":
         "ui/src/app/api/game/[id]/state/route.ts",
         "ui/src/app/api/game/init/route.ts",
         "ui/src/app/api/game/spawn/route.ts",
+
+        "ui/src/app/api/match/create/route.ts",
+        "ui/src/app/api/match/join/route.ts",
+        "ui/src/app/api/match/list/route.ts",
+
         "ui/src/app/api/mcp/[transport]/route.ts",
+
         "ui/src/app/arena/page.tsx", 
+
+        "ui/src/app/lobby/page.tsx",
+
         "ui/src/app/page.tsx",
+
         "ui/src/game/GameEngine.ts", 
         "ui/src/game/useGameEngine.ts", 
-        "ui/src/lib/gameStore.ts"
+
+        "ui/src/hooks/useOnlineGame.ts",
+
+        "ui/src/lib/gameStore.ts",
+        "ui/src/lib/session.ts",
+        "ui/src/lib/utils.ts",
+
+        "ui/src/services/api.ts",
+        "ui/src/services/gameClient.ts",
+        "ui/src/services/websocket.ts",
+
+        "ui/src/types/backend.ts",
     ]
 
     concat_files_to_txt(files, "code_to_send.txt")

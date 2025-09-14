@@ -62,6 +62,139 @@ export async function POST(req: Request) {
   }
 }
 
+# ====== ui/src/app/api/match/create/route.ts ======
+import { NextResponse } from 'next/server';
+import { getSessionHeaders } from '@/lib/session';
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+
+export async function POST() {
+  try {
+    const headers = await getSessionHeaders();
+
+    const response = await fetch(`${BACKEND_URL}/api/match/create`, {
+      method: 'POST',
+      headers,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error creating match:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to create match'
+        },
+        timestamp: Date.now()
+      },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/match/join/route.ts ======
+import { NextRequest, NextResponse } from 'next/server';
+import { getSessionHeaders } from '@/lib/session';
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const headers = await getSessionHeaders();
+
+    console.log('[Frontend API /join] Request to join match:', {
+      matchId: body.matchId,
+      playerId: headers['x-player-id'],
+      playerName: headers['x-player-name']
+    });
+
+    const response = await fetch(`${BACKEND_URL}/api/match/join`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[Frontend API /join] Backend error:', {
+        status: response.status,
+        error: data.error,
+        matchId: body.matchId
+      });
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    console.log('[Frontend API /join] Successfully joined match:', {
+      matchId: body.matchId,
+      team: data.data?.team,
+      playerId: headers['x-player-id']
+    });
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('[Frontend API /join] Error joining match:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to join match'
+        },
+        timestamp: Date.now()
+      },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/match/list/route.ts ======
+import { NextResponse } from 'next/server';
+import { getSessionHeaders } from '@/lib/session';
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+
+export async function GET() {
+  try {
+    const headers = await getSessionHeaders();
+
+    const response = await fetch(`${BACKEND_URL}/api/match`, {
+      method: 'GET',
+      headers,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error listing matches:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to list matches'
+        },
+        timestamp: Date.now()
+      },
+      { status: 500 }
+    );
+  }
+}
+
 # ====== ui/src/app/api/mcp/[transport]/route.ts ======
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -148,22 +281,33 @@ export function GET() { return NextResponse.json({ ok: true, endpoint: "MCP stre
 "use client";
 
 import { Button } from "@/components/ui/button";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useGameEngine } from "@/game/useGameEngine";
+import { useOnlineGame } from "@/hooks/useOnlineGame";
+
 import TowerHealthBar from "@/components/TowerHealthBar";
 import ClashTimer from "@/components/ClashTimer";
 import GameEndScreen from "@/components/GameEndScreen";
 import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
-import { useSearchParams, useRouter } from "next/navigation";
-import { GameState } from "@/lib/gameStore";
+import { gameEngine } from "@/game/GameEngine";
+import { GameStatus } from "@/types/backend";
+import { GameState } from "@/game/GameEngine";
 
-export default function Arena() {
+function ArenaContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isOnlineMode = searchParams.get('mode') === 'online';
+  const [onlineMatchId, setOnlineMatchId] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+
   const showGrid = false;
   const numRows = 34;
   const numCols = 18;
 
   const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
   const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
-  const router = useRouter();
   const params = useSearchParams();
   const gameId = params.get("game_id");
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -206,36 +350,158 @@ export default function Arena() {
     }
   }), []);
 
-  // Si pas d'ID -> retour au menu
-  useEffect(() => {
-    if (!gameId) router.replace("/");
-  }, [gameId, router]);
+  // Convertir TOWER en format compatible avec le moteur de jeu
+  const towersForGame = Object.values(TOWER).map(tower => ({
+    id: tower.id,
+    type: tower.type as 'king' | 'princess',
+    team: tower.team as 'red' | 'blue',
+    row: tower.row,
+    col: tower.col,
+    health: tower.type === 'king' ? 4824 : 3052,
+    maxHealth: tower.type === 'king' ? 4824 : 3052,
+    isAlive: true,
+    active: true,
+    position: { row: tower.row, col: tower.col },
+    offsetX: tower.offsetX,
+    offsetY: tower.offsetY,
+    lastAttackTime: 0,
+    isAttacking: false,
+    canAttack: true
+  }));
+  
+  // Local game hook
+  const localGame = useGameEngine(towersForGame, undefined);
 
-  // Poller l'état du jeu
+  // Online game hook
+  const onlineGame = useOnlineGame();
+
+  // Initialize online game if in online mode
   useEffect(() => {
-    if (!gameId) return;
-    
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data || data.error) return;
-        setGameState(data);
-      } catch (error) {
-        console.error("Failed to fetch game state:", error);
+    if (isOnlineMode) {
+      const matchId = sessionStorage.getItem('matchId');
+      const isHost = sessionStorage.getItem('isHost') === 'true';
+      const playerTeam = sessionStorage.getItem('playerTeam') as 'red' | 'blue' | null;
+
+      if (matchId) {
+        setOnlineMatchId(matchId);
+        setIsConnecting(true);
+
+        // Connect to the match
+        if (isHost) {
+          onlineGame.createMatch().then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to create match');
+              router.push('/lobby');
+            }
+          });
+        } else {
+          onlineGame.joinMatch(matchId).then(success => {
+            setIsConnecting(false);
+            if (!success) {
+              alert('Failed to join match');
+              router.push('/lobby');
+            } else if (playerTeam) {
+              setCurrentTeam(playerTeam);
+            }
+          });
+        }
+      } else {
+        // No match ID, redirect to lobby
+        router.push('/lobby');
       }
-    }, 500);
+    } else {
+      // Local mode - Initialize towers in GameEngine
+      Object.values(TOWER).forEach(tower => {
+        gameEngine.addTower(tower.id, tower.type as 'king' | 'princess', tower.team as 'red' | 'blue', tower.row, tower.col);
+      });
+    }
 
-    return () => clearInterval(interval);
-  }, [gameId]);
+    return () => {
+      if (isOnlineMode) {
+        onlineGame.disconnect();
+      } else {
+        // Clean up towers on component destroy
+        Object.values(TOWER).forEach(tower => {
+          gameEngine.removeTower(tower.id);
+        });
+      }
+    };
+  }, [isOnlineMode]);
 
-  const handleCardDragStart = (troopType: TroopType) => setDraggedCard({ troopType, team: currentTeam });
+  // Use appropriate game based on mode
+  const game = isOnlineMode ? onlineGame : localGame;
+  const troops = game.troops;
+  const gameEngineTowers = isOnlineMode ? game.towers : localGame.towers;
+  const spawnTroop = isOnlineMode
+    ? (type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+        // In online mode, only allow spawning for player's team
+        if (team === onlineGame.playerTeam) {
+          onlineGame.spawnTroop(type, team, row, col);
+        }
+      }
+    : localGame.spawnTroop;
+  const startGame = isOnlineMode ? () => {} : localGame.startGame; // Online games start automatically
+  const pauseGame = isOnlineMode ? onlineGame.pauseGame : localGame.pauseGame;
+  const resumeGame = isOnlineMode ? onlineGame.resumeGame : localGame.resumeGame;
+  const stopGame = isOnlineMode ? onlineGame.disconnect : localGame.stopGame;
+  const resetGame = isOnlineMode ? () => router.push('/lobby') : localGame.resetGame;
+  const isGameRunning = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.IN_PROGRESS
+    : localGame.isGameRunning;
+  const isGamePaused = isOnlineMode
+    ? onlineGame.gameStatus === GameStatus.PAUSED
+    : localGame.isGamePaused;
+  const gameEnded = isOnlineMode ? onlineGame.gameEnded : localGame.gameEnded;
+  const winner = isOnlineMode ? onlineGame.winner : localGame.winner;
+
+  // Fetch game state for local mode only
+  React.useEffect(() => {
+    if (!isOnlineMode && gameId) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data || data.error) return;
+          setGameState(data);
+        } catch (error) {
+          console.error("Failed to fetch game state:", error);
+        }
+      }, 500);
+
+      return () => clearInterval(interval);
+    }
+  }, [gameId, isOnlineMode]);
+
+  // Sync currentTeam with player's actual team in online mode
+  React.useEffect(() => {
+    if (isOnlineMode && onlineGame.playerTeam) {
+      setCurrentTeam(onlineGame.playerTeam);
+    }
+  }, [isOnlineMode, onlineGame.playerTeam]);
+
+  const handleCardDragStart = (troopType: TroopType) => {
+    // In online mode, always use the player's actual team
+    const team = isOnlineMode && onlineGame.playerTeam ? onlineGame.playerTeam : currentTeam;
+    setDraggedCard({ troopType, team });
+  };
   const handleCardDragEnd = () => setDraggedCard(null);
   
   const handleCellDrop = async (row: number, col: number, e: React.DragEvent) => {
     e.preventDefault();
-    if (draggedCard && gameId) {
+    if (!draggedCard) return;
+
+    if (isOnlineMode) {
+      // Online mode: Use onlineGame to spawn troops
+      if (onlineGame.playerTeam && draggedCard.team === onlineGame.playerTeam) {
+        onlineGame.playCard(draggedCard.troopType, row, col);
+        setDraggedCard(null);
+      } else {
+        console.warn("Cannot spawn troops for enemy team");
+      }
+    } else if (gameId) {
+      // Local mode: Use API endpoint
       try {
         await fetch("/api/game/spawn", {
           method: "POST",
@@ -258,36 +524,109 @@ export default function Arena() {
   const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
 
   const normalizeType = (s: any): TroopType | null => {
-    const u = String(s || "").toUpperCase();
-    if (u === "GIANT" || u === "BABY_DRAGON" || u === "MINI_PEKKA" || u === "VALKYRIE") return u as TroopType;
+    const u = String(s || "").toLowerCase();
+    if (u === "giant") return TroopType.GIANT;
+    if (u === "babydragon" || u === "baby_dragon") return TroopType.BABY_DRAGON;
+    if (u === "minipekka" || u === "mini_pekka") return TroopType.MINI_PEKKA;
+    if (u === "valkyrie") return TroopType.VALKYRIE;
     console.warn("Unknown troop.type from API:", s);
     return null;
+  };
+
+  const FALLBACK_WALK: Record<TroopType, {player: string; opponent: string}> = {
+    [TroopType.GIANT]: { player: "/images/troops/giant/Giant_walk_player.gif", opponent: "/images/troops/giant/Giant_walk_opponent.gif" },
+    [TroopType.BABY_DRAGON]: { player: "/images/troops/babydragon/BabyDragon_walk_player.gif", opponent: "/images/troops/babydragon/BabyDragon_walk_opponent.gif" },
+    [TroopType.MINI_PEKKA]: { player: "/images/troops/minipekka/MiniPekka_walk_player.gif", opponent: "/images/troops/minipekka/MiniPekka_walk_opponent.gif" },
+    [TroopType.VALKYRIE]: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
+  };
+
+  const FALLBACK_FIGHT: Record<TroopType, {player: string; opponent: string}> = {
+    [TroopType.GIANT]: { player: "/images/troops/giant/Giant_fight_player.gif", opponent: "/images/troops/giant/Giant_fight_opponent.gif" },
+    [TroopType.BABY_DRAGON]: { player: "/images/troops/babydragon/BabyDragon_fight_player.gif", opponent: "/images/troops/babydragon/BabyDragon_fight_opponent.gif" },
+    [TroopType.MINI_PEKKA]: { player: "/images/troops/minipekka/MiniPekka_fight_player.gif", opponent: "/images/troops/minipekka/MiniPekka_fight_opponent.gif" },
+    [TroopType.VALKYRIE]: { player: "/images/troops/valkyrie/Valkyrie_fight_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_fight_opponent.gif" },
   };
 
   const getTroopGifPath = (troop: any) => {
     const norm = normalizeType(troop?.type);
     if (!norm) return null;
-    const config = TROOP_CONFIGS[norm];
-    if (!config?.gifPaths?.walk) return null;
-    const gifType = troop.team === 'red' ? 'player' : 'opponent';
-    return `${config.gifPaths.walk[gifType]}?v=${troop.id}`;
+    const gifType = troop.team === 'blue' ? 'player' : 'opponent';
+    const cfg = TROOP_CONFIGS[norm];
+
+    // Check if troop is in combat (attacking state)
+    const isAttacking = troop.state === 'ATTACKING_TOWER' || troop.state === 12; // TroopState.ATTACKING_TOWER = 12
+
+    // Select appropriate gif based on state
+    const gifPaths = isAttacking ? cfg?.gifPaths?.fight : cfg?.gifPaths?.walk;
+    const fallback = isAttacking ? FALLBACK_FIGHT[norm] : FALLBACK_WALK[norm];
+    const fromConfig = gifPaths?.[gifType];
+
+    return (typeof fromConfig === "string" && fromConfig.length > 0)
+      ? `${fromConfig}?v=${troop.id}`
+      : `${fallback[gifType]}?v=${troop.id}`;
   };
 
   const handleRestart = () => {
     router.push("/");
   };
 
-  if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
-  if (!gameState) return <div>Loading game...</div>;
+  // Conditional rendering based on mode
+  if (isOnlineMode) {
+    if (isConnecting) {
+      return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Connecting to match...</div>;
+    }
+    if (!onlineGame.isConnected && !isConnecting) {
+      return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">Connection failed. Redirecting...</div>;
+    }
+    // Check if game is waiting for players
+    if (onlineGame.gameStatus === GameStatus.WAITING) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Waiting for opponent...</h2>
+            <p className="text-gray-400">Match ID: {onlineGame.matchId}</p>
+            <p className="text-gray-400 mt-2">Players: {onlineGame.players.length}/2</p>
+            <div className="mt-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } else {
+    // Local mode checks
+    if (!gameId) return null;
+    if (!gameState) return <div>Loading game...</div>;
+  }
 
-  // Debug: log les troupes reçues
-  console.log("TROUPES REÇUES:", gameState?.troops);
+  // Get game data based on mode
+  const gameTroops = isOnlineMode ? troops : (gameState?.troops ?? []);
+  const gameTowers = isOnlineMode ?
+    Object.values(TOWER).reduce((acc, tower) => {
+      const engineTower = gameEngineTowers.find(t => t.id === tower.id);
+      // Only include tower data if it exists in the engine
+      if (engineTower) {
+        return {
+          ...acc,
+          [tower.id]: {
+            health: engineTower.health,
+            maxHealth: engineTower.maxHealth, // Use camelCase for consistency
+            isAlive: engineTower.isAlive,
+            active: engineTower.active
+          }
+        };
+      }
+      return acc;
+    }, {} as any) :
+    gameState?.towers;
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
       <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
 
-      {gameState.is_game_over && gameState.winner && <GameEndScreen winner={gameState.winner as "red" | "blue"} onRestart={handleRestart} />}
+      {(isOnlineMode ? gameEnded : gameState?.is_game_over) &&
+       (isOnlineMode ? winner : gameState?.winner) &&
+       <GameEndScreen winner={(isOnlineMode ? winner : gameState.winner) as "red" | "blue"} onRestart={handleRestart} />}
 
       <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
         <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
@@ -317,10 +656,17 @@ export default function Arena() {
                   onDrop={(e) => handleCellDrop(row, col, e)}
                   onDragOver={handleCellDragOver}
                 >
+                  {/* Debug overlay minimal */}
+                  {gameTroops.some(t => Math.floor(t.position.row) === row && Math.floor(t.position.col) === col) && (
+                    <div className="absolute inset-0 z-30 pointer-events-none ring-2 ring-green-300/60"></div>
+                  )}
+                  
                   {shouldShowTower && (() => {
-                    const engineTower = gameState.towers[tower!.id];
-                    const dead = engineTower && engineTower.health <= 0;
-                    if (dead) return null;
+                    const engineTower = gameTowers?.[tower!.id];
+                    // Check if tower exists and is alive
+                    if (!engineTower || engineTower.health <= 0 || !engineTower.isAlive) {
+                      return null; // Don't show destroyed towers
+                    }
 
                     return (
                       <>
@@ -341,18 +687,17 @@ export default function Arena() {
                             }px`,
                           }}
                         >
-                          {(() => {
-                            const t = engineTower;
-                            const currentHealth = t?.health || ((tower as any).type === 'king' ? 4825 : 3052);
-                            const maxHealth = t?.max_health || ((tower as any).type === 'king' ? 4825 : 3052);
-                            return <TowerHealthBar currentHealth={currentHealth} maxHealth={maxHealth} team={(tower as any).team} />;
-                          })()}
+                          <TowerHealthBar
+                            currentHealth={engineTower.health}
+                            maxHealth={engineTower.maxHealth}
+                            team={(tower as any).team}
+                          />
                         </div>
                       </>
                     );
                   })()}
 
-                  {(gameState.troops ?? [])
+                  {gameTroops
                     .filter(t => {
                       const p = t?.position;
                       return p && Number.isFinite(p.row) && Number.isFinite(p.col)
@@ -366,7 +711,7 @@ export default function Arena() {
                       if (!gifPath || !config) return null;
                       const p = t.position;
                       const hp = typeof t.health === "number" ? t.health : 0;
-                      const maxhp = typeof t.max_health === "number" && t.max_health > 0 ? t.max_health : 1;
+                      const maxhp = typeof t.maxHealth === "number" && t.maxHealth > 0 ? t.maxHealth : 1;
 
                       return (
                         <div
@@ -378,9 +723,15 @@ export default function Arena() {
                             src={gifPath}
                             alt={`${norm} ${t.team}`}
                             className="w-12 h-12 object-contain"
-                            style={{ transform: `scale(${typeof config.scale === 'object' ? config.scale.walk : config.scale})` }}
+                            style={{
+                              transform: `scale(${
+                                typeof config?.scale === 'object'
+                                  ? ((t.state === 'ATTACKING_TOWER' || t.state === 12) ? (config.scale.fight ?? 1) : (config.scale.walk ?? 1))
+                                  : (config?.scale ?? 1)
+                              })`
+                            }}
                           />
-                          <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
+                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-gray-600 rounded">
                             <div
                               className={`h-full rounded transition-all duration-200 ${t.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
                               style={{ width: `${(hp / maxhp) * 100}%` }}
@@ -396,11 +747,14 @@ export default function Arena() {
         </div>
 
         <div className="absolute top-4 right-4 z-10">
-          <ClashTimer />
+          <ClashTimer
+            gameTime={isOnlineMode ? onlineGame.gameTime : undefined}
+            isOnlineMode={isOnlineMode}
+          />
         </div>
 
         {/* Debug: affichage temporaire de tous les troops */}
-        {(gameState.troops ?? []).map(t => (
+        {(gameState?.troops ?? []).map(t => (
           <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
             {t.type} {t.team} @ {t.position.row},{t.position.col}
           </div>
@@ -415,9 +769,9 @@ export default function Arena() {
                 {/* Baby Dragon */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -427,9 +781,9 @@ export default function Arena() {
                 {/* Mini PEKKA */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -439,9 +793,9 @@ export default function Arena() {
                 {/* Giant */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.GIANT)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -451,9 +805,9 @@ export default function Arena() {
                 {/* Valkyrie */}
                 <div
                   className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
                   }`}
-                  draggable={!!gameState}
+                  draggable={isGameRunning}
                   onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
                   onDragEnd={handleCardDragEnd}
                 >
@@ -463,31 +817,399 @@ export default function Arena() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Contrôles */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
-        <Button
-          variant="secondary"
-          className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
-            currentTeam === 'red' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}
-          onClick={switchTeam}
-        >
-          Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
-        </Button>
+        {/* Contrôles du jeu */}
+        <div className="absolute top-4 left-4 z-10 space-y-2">
+          {/* Online Mode Indicator */}
+          {isOnlineMode && (
+            <div className="bg-black/70 backdrop-blur-sm rounded-lg p-3 border border-purple-500/30">
+              <div className="flex items-center gap-2 mb-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  onlineGame.isConnected ? 'bg-green-500' :
+                  isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                }`} />
+                <span className="text-white text-sm font-semibold">
+                  {onlineGame.isConnected ? 'Connected' :
+                   isConnecting ? 'Connecting...' : 'Disconnected'}
+                </span>
+              </div>
+              {onlineGame.playerTeam && (
+                <div className="text-xs text-gray-300">
+                  <p>Team: <span className={`font-bold ${
+                    onlineGame.playerTeam === 'red' ? 'text-red-400' : 'text-blue-400'
+                  }`}>{onlineGame.playerTeam.toUpperCase()}</span></p>
+                  <p>Match: {onlineMatchId?.substring(0, 8)}</p>
+                  <p>Elixir: {Math.floor(onlineGame.playerElixir)}/{10}</p>
+                </div>
+              )}
+              <Button
+                onClick={() => {
+                  onlineGame.disconnect();
+                  router.push('/lobby');
+                }}
+                variant="destructive"
+                size="sm"
+                className="w-full mt-2"
+              >
+                Leave Match
+              </Button>
+            </div>
+          )}
 
-        <div className="text-center">
-          <div className="bg-black/50 rounded-lg p-3 border border-white/20">
-            <p className="text-white text-sm font-medium">
-              Drag cards from the bottom to spawn {currentTeam} troops
-            </p>
-            <p className="text-gray-300 text-xs mt-1">Switch team with the button above</p>
-            <p className="text-yellow-400 text-xs mt-1">
-              Elixir: {currentTeam === 'red' ? gameState.elixir.red : gameState.elixir.blue}/10
-            </p>
+          {/* Bouton pour switcher d'équipe (local mode only) */}
+          {!isOnlineMode && (
+          <Button
+            variant="secondary"
+            className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
+              currentTeam === 'red' 
+                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+            onClick={switchTeam}
+          >
+            Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
+          </Button>
+          )}
+
+          {/* Contrôles de jeu */}
+          <div className="space-x-2">
+            {!isGameRunning ? (
+              <Button 
+                variant="secondary" 
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                onClick={startGame}
+              >
+                Start Game
+              </Button>
+            ) : (
+              <>
+                {isGamePaused ? (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={resumeGame}
+                  >
+                    Resume
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="secondary" 
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                    onClick={pauseGame}
+                  >
+                    Pause
+                  </Button>
+                )}
+                <Button 
+                  variant="secondary" 
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
+                  onClick={stopGame}
+                >
+                  Stop
+                </Button>
+              </>
+            )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Wrapper component with Suspense for Next.js
+export default function Arena() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-white text-2xl animate-pulse">Loading Arena...</div>
+      </div>
+    }>
+      <ArenaContent />
+    </Suspense>
+  );
+}
+
+
+# ====== ui/src/app/lobby/page.tsx ======
+"use client";
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { apiClient } from '@/services/api';
+import { MatchInfo, GameStatus } from '@/types/backend';
+
+export default function Lobby() {
+  const router = useRouter();
+  const [playerName, setPlayerName] = useState('');
+  const [matchId, setMatchId] = useState('');
+  const [matches, setMatches] = useState<MatchInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Initialize with a default player name
+  useEffect(() => {
+    // Generate a random player name for this session
+    setPlayerName(`Player_${Math.floor(Math.random() * 10000)}`);
+  }, []);
+
+  // Fetch available matches
+  useEffect(() => {
+    fetchMatches();
+    const interval = setInterval(fetchMatches, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchMatches = async () => {
+    try {
+      const matchList = await apiClient.listMatches();
+      setMatches(matchList.filter(m => m.status === GameStatus.WAITING));
+    } catch (err) {
+      console.error('Failed to fetch matches:', err);
+    }
+  };
+
+  const handleCreateMatch = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Player name is now managed server-side via cookies
+      // No need to update it here
+
+      const response = await apiClient.createMatch();
+      if (response) {
+        // Store match ID and player info, then navigate to arena
+        sessionStorage.setItem('matchId', response.matchId);
+        sessionStorage.setItem('isHost', 'true');
+        // Store the player ID from the response if available
+        if (response.playerState) {
+          sessionStorage.setItem('playerId', response.playerState.id);
+          sessionStorage.setItem('playerName', response.playerState.name);
+          sessionStorage.setItem('playerTeam', response.playerState.team);
+        }
+        router.push('/arena?mode=online');
+      } else {
+        setError('Failed to create match');
+      }
+    } catch (err) {
+      setError('Failed to create match');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinMatch = async (joinMatchId?: string) => {
+    const targetMatchId = joinMatchId || matchId;
+    if (!targetMatchId) {
+      setError('Please enter a match ID');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Player name is now managed server-side via cookies
+      // No need to update it here
+
+      const response = await apiClient.joinMatch(targetMatchId);
+      if (response) {
+        // Store match ID and player info, then navigate to arena
+        sessionStorage.setItem('matchId', targetMatchId);
+        sessionStorage.setItem('isHost', 'false');
+        sessionStorage.setItem('playerTeam', response.team);
+        // Store the player ID from the response
+        if (response.playerState) {
+          sessionStorage.setItem('playerId', response.playerState.id);
+          sessionStorage.setItem('playerName', response.playerState.name);
+        }
+        router.push('/arena?mode=online');
+      } else {
+        setError('Failed to join match');
+      }
+    } catch (err) {
+      setError('Failed to join match - match may be full or not exist');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = (status: GameStatus) => {
+    switch (status) {
+      case GameStatus.WAITING:
+        return 'text-green-500';
+      case GameStatus.IN_PROGRESS:
+        return 'text-yellow-500';
+      case GameStatus.ENDED:
+        return 'text-red-500';
+      default:
+        return 'text-gray-500';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-blue-900 to-purple-900 flex items-center justify-center p-4">
+      <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+        {/* Create/Join Section */}
+        <Card className="p-8 bg-black/50 backdrop-blur border-purple-500/30">
+          <h1 className="text-4xl font-bold text-white mb-8 text-center">
+            🎮 Clash Royale Online
+          </h1>
+
+          {/* Player Name */}
+          <div className="mb-6">
+            <label className="text-white text-sm mb-2 block">Your Name</label>
+            <Input
+              type="text"
+              placeholder="Enter your name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              className="bg-black/50 border-purple-500/50 text-white"
+            />
+          </div>
+
+          {/* Create Match */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-4">Create New Match</h2>
+            <Button
+              onClick={handleCreateMatch}
+              disabled={loading || !playerName}
+              className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3"
+            >
+              {loading ? 'Creating...' : '⚔️ Create Match'}
+            </Button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-purple-500/30"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-transparent px-4 text-purple-300">OR</span>
+            </div>
+          </div>
+
+          {/* Join Match */}
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold text-white mb-4">Join Existing Match</h2>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Enter Match ID"
+                value={matchId}
+                onChange={(e) => setMatchId(e.target.value)}
+                className="bg-black/50 border-purple-500/50 text-white"
+              />
+              <Button
+                onClick={() => handleJoinMatch()}
+                disabled={loading || !playerName}
+                className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold px-6"
+              >
+                {loading ? 'Joining...' : 'Join'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-300 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Back Button */}
+          <Button
+            onClick={() => router.push('/')}
+            variant="outline"
+            className="w-full mt-6 border-purple-500/50 text-purple-300 hover:bg-purple-500/20"
+          >
+            ← Back to Home
+          </Button>
+        </Card>
+
+        {/* Available Matches */}
+        <Card className="p-8 bg-black/50 backdrop-blur border-purple-500/30">
+          <h2 className="text-3xl font-bold text-white mb-6">Available Matches</h2>
+
+          <div className="space-y-3 max-h-[500px] overflow-y-auto">
+            {matches.length === 0 ? (
+              <div className="text-center py-8 text-purple-300">
+                <p className="text-lg mb-2">No matches available</p>
+                <p className="text-sm opacity-75">Create a new match to start playing!</p>
+              </div>
+            ) : (
+              matches.map((match) => (
+                <div
+                  key={match.id}
+                  className="p-4 bg-black/30 rounded-lg border border-purple-500/30 hover:border-purple-500/50 transition-colors"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="text-white font-semibold">
+                        Match #{match.id.substring(0, 8)}
+                      </p>
+                      <p className={`text-sm ${getStatusColor(match.status)}`}>
+                        {match.status}
+                      </p>
+                    </div>
+                    <span className="text-purple-300 text-sm">
+                      {match.playerCount}/{match.maxPlayers} players
+                    </span>
+                  </div>
+
+                  {/* Players in match */}
+                  {match.players.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-purple-300 mb-1">Players:</p>
+                      <div className="flex gap-2">
+                        {match.players.map((player) => (
+                          <span
+                            key={player.id}
+                            className={`text-xs px-2 py-1 rounded ${
+                              player.team === 'red'
+                                ? 'bg-red-500/30 text-red-300'
+                                : 'bg-blue-500/30 text-blue-300'
+                            }`}
+                          >
+                            {player.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {match.playerCount < match.maxPlayers && (
+                    <Button
+                      onClick={() => handleJoinMatch(match.id)}
+                      disabled={loading}
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
+                    >
+                      Join Match
+                    </Button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-6 p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
+            <h3 className="text-white font-semibold mb-2">How to Play</h3>
+            <ul className="text-sm text-purple-300 space-y-1">
+              <li>• Create a match or join an existing one</li>
+              <li>• Wait for another player to join</li>
+              <li>• Battle starts automatically when room is full</li>
+              <li>• Drag cards to deploy troops</li>
+              <li>• Destroy enemy towers to win!</li>
+            </ul>
+          </div>
+        </Card>
       </div>
     </div>
   );
@@ -503,16 +1225,17 @@ import TransitionScreen from "@/components/TransitionScreen";
 
 export default function Home() {
   const [showTransition, setShowTransition] = useState(false);
+  const [gameMode, setGameMode] = useState<'local' | 'online' | null>(null);
   const router = useRouter();
 
-  const handleCombatClick = async () => {
-    try {
-      const res = await fetch("/api/game/init", { method: "POST" });
-      const { game_id } = await res.json();
-      router.push(`/arena?game_id=${game_id}`);
-    } catch (error) {
-      console.error("Failed to create game:", error);
-    }
+  const handleLocalCombat = () => {
+    setGameMode('local');
+    setShowTransition(true);
+
+  };
+
+  const handleOnlineCombat = () => {
+    router.push('/lobby');
   };
 
   return (
@@ -533,22 +1256,36 @@ export default function Home() {
             className="w-full h-full object-cover"
           />
           
-          {/* Bouton jouer stylisé */}
-          <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center">
-            <Button 
-              onClick={handleCombatClick}
-              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-10 px-7 rounded-2xl text-2xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
-            >
-              Combat
-            </Button>
+          {/* Boutons de jeu */}
+          <div className="absolute bottom-6 left-0 right-0 px-4">
+            <div className="space-y-3">
+              {/* Mode Local */}
+              <Button
+                onClick={handleLocalCombat}
+                className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
+              >
+                🎮 Combat Local
+              </Button>
+
+              {/* Mode Online */}
+              <Button
+                onClick={handleOnlineCombat}
+                className="w-full bg-gradient-to-r from-purple-500 to-blue-600 hover:from-purple-600 hover:to-blue-700 text-white font-bold py-6 px-7 rounded-2xl text-xl transition-all duration-300 shadow-2xl border-4 border-purple-300"
+              >
+                🌐 Combat Online
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Écran de transition */}
-      {showTransition && (
-        <TransitionScreen 
-          onTransitionComplete={() => setShowTransition(false)}
+      {showTransition && gameMode === 'local' && (
+        <TransitionScreen
+          onTransitionComplete={() => {
+            setShowTransition(false);
+            router.push('/arena?mode=local');
+          }}
         />
       )}
     </>
@@ -1217,6 +1954,238 @@ export const useGameEngine = (towers?: Tower[], flaggedCells?: Set<string>): Gam
 };
 
 
+# ====== ui/src/hooks/useOnlineGame.ts ======
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { GameClient } from '@/services/gameClient';
+import { ConnectionStatus } from '@/services/websocket';
+import {
+  GameSnapshot,
+  GameStatus,
+  TroopData,
+  TowerData,
+  PlayerState
+} from '@/types/backend';
+import { BaseTroop, TroopType } from '@/game/types/Troop';
+import { Tower } from '@/game/types/Tower';
+
+export interface OnlineGameHookReturn {
+  // Connection
+  connectionStatus: ConnectionStatus;
+  isConnected: boolean;
+  matchId: string | null;
+
+  // Game state
+  troops: BaseTroop[];
+  towers: Tower[];
+  players: PlayerState[];
+
+  // Player state
+  playerTeam: 'red' | 'blue' | null;
+  playerElixir: number;
+  playerState: PlayerState | null;
+
+  // Game status
+  gameStatus: GameStatus | null;
+  gameTime: number;
+  gameEnded: boolean;
+  winner: 'red' | 'blue' | 'draw' | null;
+
+  // Actions
+  createMatch: () => Promise<boolean>;
+  joinMatch: (matchId: string) => Promise<boolean>;
+  spawnTroop: (type: TroopType, team: 'red' | 'blue', row: number, col: number) => void;
+  playCard: (troopType: string, row: number, col: number) => void;
+  pauseGame: () => void;
+  resumeGame: () => void;
+  surrender: () => void;
+  disconnect: () => void;
+
+  // Stats
+  gameStats: {
+    totalTroops: number;
+    livingTroops: number;
+    redTroops: number;
+    blueTroops: number;
+    gameTime: number;
+    isRunning: boolean;
+    isPaused: boolean;
+  };
+}
+
+export const useOnlineGame = (): OnlineGameHookReturn => {
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
+  const [gameEnded, setGameEnded] = useState(false);
+  const [winner, setWinner] = useState<'red' | 'blue' | 'draw' | null>(null);
+  const gameClientRef = useRef<GameClient | null>(null);
+
+  // Initialize game client
+  useEffect(() => {
+    if (!gameClientRef.current) {
+      gameClientRef.current = new GameClient({
+        onSnapshot: (newSnapshot) => {
+          setSnapshot(newSnapshot);
+        },
+        onStatusChange: (status) => {
+          setConnectionStatus(status);
+        },
+        onGameEnd: (gameWinner) => {
+          setGameEnded(true);
+          setWinner(gameWinner);
+        },
+        onError: (error) => {
+          console.error('Game client error:', error);
+        }
+      });
+    }
+
+    return () => {
+      gameClientRef.current?.destroy();
+      gameClientRef.current = null;
+    };
+  }, []);
+
+  // Match management
+  const createMatch = useCallback(async (): Promise<boolean> => {
+    if (!gameClientRef.current) return false;
+    setGameEnded(false);
+    setWinner(null);
+    return await gameClientRef.current.createMatch();
+  }, []);
+
+  const joinMatch = useCallback(async (matchId: string): Promise<boolean> => {
+    if (!gameClientRef.current) return false;
+    setGameEnded(false);
+    setWinner(null);
+    return await gameClientRef.current.joinMatch(matchId);
+  }, []);
+
+  // Game actions
+  const spawnTroop = useCallback((type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+    if (!gameClientRef.current) return;
+
+    // Only allow spawning for player's team
+    const playerTeam = gameClientRef.current.getPlayerTeam();
+    if (playerTeam !== team) {
+      console.warn('Cannot spawn troops for enemy team');
+      return;
+    }
+
+    gameClientRef.current.playCard(type, row, col);
+  }, []);
+
+  const playCard = useCallback((troopType: string, row: number, col: number) => {
+    if (!gameClientRef.current) return;
+    gameClientRef.current.playCard(troopType, row, col);
+  }, []);
+
+  const pauseGame = useCallback(() => {
+    gameClientRef.current?.pauseGame();
+  }, []);
+
+  const resumeGame = useCallback(() => {
+    gameClientRef.current?.resumeGame();
+  }, []);
+
+  const surrender = useCallback(() => {
+    gameClientRef.current?.surrender();
+  }, []);
+
+  const disconnect = useCallback(() => {
+    gameClientRef.current?.disconnect();
+    setSnapshot(null);
+    setConnectionStatus('disconnected');
+  }, []);
+
+  // Convert backend data to frontend format
+  const convertTroops = (troopData: TroopData[]): BaseTroop[] => {
+    return troopData.map(troop => ({
+      id: troop.id,
+      type: troop.type as TroopType,
+      team: troop.team,
+      position: troop.position,
+      targetPosition: troop.targetPosition,
+      state: troop.state as any,
+      health: troop.health,
+      maxHealth: troop.maxHealth,
+      speed: troop.speed,
+      isAlive: troop.isAlive,
+      bridgeTarget: troop.bridgeTarget,
+      towerTarget: troop.towerTarget,
+      isInCombat: troop.isInCombat,
+      attackDamage: troop.attackDamage,
+      attackSpeed: troop.attackSpeed,
+      lastAttackTime: troop.lastAttackTime,
+      focusOnBuildings: troop.focusOnBuildings,
+      flying: troop.flying,
+      row: troop.row,
+      col: troop.col
+    }));
+  };
+
+  const convertTowers = (towerData: TowerData[]): Tower[] => {
+    return towerData.map(tower => ({
+      id: tower.id,
+      type: tower.type,
+      team: tower.team,
+      row: tower.position.row,
+      col: tower.position.col,
+      health: tower.health,
+      maxHealth: tower.maxHealth,
+      isAlive: tower.isAlive,
+      active: tower.active,
+      position: tower.position
+    }));
+  };
+
+  // Calculate game stats
+  const gameStats = {
+    totalTroops: snapshot?.troops.length || 0,
+    livingTroops: snapshot?.troops.filter(t => t.isAlive).length || 0,
+    redTroops: snapshot?.troops.filter(t => t.team === 'red' && t.isAlive).length || 0,
+    blueTroops: snapshot?.troops.filter(t => t.team === 'blue' && t.isAlive).length || 0,
+    gameTime: snapshot?.gameTime || 0,
+    isRunning: snapshot?.status === GameStatus.IN_PROGRESS,
+    isPaused: snapshot?.status === GameStatus.PAUSED
+  };
+
+  return {
+    // Connection
+    connectionStatus,
+    isConnected: connectionStatus === 'connected',
+    matchId: gameClientRef.current?.getMatchId() || null,
+
+    // Game state
+    troops: snapshot ? convertTroops(snapshot.troops) : [],
+    towers: snapshot ? convertTowers(snapshot.towers) : [],
+    players: snapshot?.players || [],
+
+    // Player state
+    playerTeam: gameClientRef.current?.getPlayerTeam() || null,
+    playerElixir: gameClientRef.current?.getPlayerElixir() || 0,
+    playerState: gameClientRef.current?.getPlayerState() || null,
+
+    // Game status
+    gameStatus: snapshot?.status || null,
+    gameTime: snapshot?.gameTime || 0,
+    gameEnded,
+    winner,
+
+    // Actions
+    createMatch,
+    joinMatch,
+    spawnTroop,
+    playCard,
+    pauseGame,
+    resumeGame,
+    surrender,
+    disconnect,
+
+    // Stats
+    gameStats
+  };
+};
+
 # ====== ui/src/lib/gameStore.ts ======
 // src/lib/gameStore.ts
 import { v4 as uuidv4 } from "uuid";
@@ -1254,6 +2223,8 @@ export interface Troop {
   health: number;
   max_health: number;
   spawned_at: string;
+  speed: number;              // cellules par seconde
+  dir: { dr: number; dc: number }; // direction unitaire
 }
 
 export interface Tower {
@@ -1278,6 +2249,7 @@ export interface GameState {
   is_game_over: boolean;
   winner: string | null;
   tactical_analysis: string;
+  last_update_ms: number; // timestamp ms du dernier tick serveur
 }
 
 const games = new Map<string, GameState>();
@@ -1294,6 +2266,7 @@ function defaultTowers(): Record<string, Tower> {
 }
 
 export function createGame(): GameState {
+  const now = Date.now();
   const id = uuidv4();
   const state: GameState = {
     game_id: id,
@@ -1304,10 +2277,11 @@ export function createGame(): GameState {
     elixir_rate: 1,
     available_cards: ["GIANT", "BABY_DRAGON", "MINI_PEKKA", "VALKYRIE"],
     game_time: 0,
-    start_time: new Date().toISOString(),
+    start_time: new Date(now).toISOString(),
     is_game_over: false,
     winner: null,
     tactical_analysis: "Equal troop count on battlefield. Early game: Focus on elixir trades and chip damage",
+    last_update_ms: now,
   };
   games.set(id, state);
   return state;
@@ -1332,6 +2306,16 @@ export function spawnTroop(
   if (!isValidPosition(position)) throw new Error("Invalid position");
 
   const pos = sanitizePosition(position);
+  // NE PAS re-floor par la suite, on veut des floats qui bougent
+
+  const baseSpeeds: Record<TroopType, number> = {
+    GIANT: 1.2,        // ~1.2 cellules/sec
+    BABY_DRAGON: 1.6,
+    MINI_PEKKA: 1.8,
+    VALKYRIE: 1.5,
+  };
+
+  const dir = (team === "red") ? { dr: +1, dc: 0 } : { dr: -1, dc: 0 };
 
   const costs: Record<TroopType, number> = {
     GIANT: 5,
@@ -1349,10 +2333,12 @@ export function spawnTroop(
     id: `${troop_type}_${team}_${game.troops.length}_${Math.random().toString(16).slice(2, 8)}`,
     type: troop_type,
     team,
-    position: pos,
+    position: { row: pos.row, col: pos.col }, // garder floats
     health: 100,
     max_health: 100,
     spawned_at: new Date().toISOString(),
+    speed: baseSpeeds[troop_type],
+    dir,
   };
 
   game.troops.push(troop);
@@ -1365,14 +2351,902 @@ export function updateGameTime(id: string): GameState | null {
   const game = games.get(id);
   if (!game) return null;
 
-  const now = new Date();
-  const startTime = new Date(game.start_time);
-  game.game_time = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+  const nowMs = Date.now();
+  const dt = Math.max(0, (nowMs - game.last_update_ms) / 1000); // en secondes
+  game.last_update_ms = nowMs;
 
-  game.elixir.red = Math.min(game.max_elixir, game.elixir.red + game.elixir_rate * 0.1);
-  game.elixir.blue = Math.min(game.max_elixir, game.elixir.blue + game.elixir_rate * 0.1);
+  // Temps de jeu à partir du start + dt pour robustesse
+  const startTime = new Date(game.start_time).getTime();
+  game.game_time = Math.floor((nowMs - startTime) / 1000);
+
+  // Regen d'élixir
+  const regen = game.elixir_rate * 0.1;
+  game.elixir.red = Math.min(game.max_elixir, game.elixir.red + regen);
+  game.elixir.blue = Math.min(game.max_elixir, game.elixir.blue + regen);
+
+  // Mouvement simple des troupes: avance tout droit vers la King Tower adverse
+  for (const t of game.troops) {
+    if (t.health <= 0) continue;
+
+    // cible colonne de la king adverse pour un léger recentrage horizontal
+    const targetCol = (t.team === "red") ? game.towers.king_blue.position.col
+                                         : game.towers.king_red.position.col;
+
+    // correction latérale douce vers la colonne cible
+    const dc = Math.sign(targetCol - t.position.col) * 0.2; // 0.2 cell/s max en latéral
+    const dr = t.dir.dr;                                     // avance principale
+
+    const stepR = (dr) * t.speed * dt;
+    const stepC = (dc) * dt;
+
+    t.position.row = clamp(t.position.row + stepR, 0, BOARD_ROWS - 1);
+    t.position.col = clamp(t.position.col + stepC, 0, BOARD_COLS - 1);
+
+    // stop si atteint la ligne de la king adverse
+    const goalRow = (t.team === "red") ? game.towers.king_blue.position.row
+                                       : game.towers.king_red.position.row;
+    if (Math.abs(t.position.row - goalRow) < 0.5) {
+      t.speed = 0; // s'arrête pour l'instant
+    }
+  }
 
   games.set(id, game);
   return game;
 }
 
+
+# ====== ui/src/lib/session.ts ======
+import { cookies } from 'next/headers';
+import { v4 as uuidv4 } from 'uuid';
+
+const PLAYER_ID_COOKIE = 'player_id';
+const PLAYER_NAME_COOKIE = 'player_name';
+
+export async function getOrCreatePlayerId(): Promise<string> {
+  const cookieStore = await cookies();
+  let playerId = cookieStore.get(PLAYER_ID_COOKIE)?.value;
+
+  if (!playerId) {
+    // Generate a unique player ID using UUID v4
+    playerId = `player_${uuidv4()}`;
+    console.log(`[Session] Creating new player ID: ${playerId}`);
+    cookieStore.set(PLAYER_ID_COOKIE, playerId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/'
+    });
+  } else {
+    console.log(`[Session] Using existing player ID: ${playerId}`);
+  }
+
+  return playerId;
+}
+
+export async function getOrCreatePlayerName(): Promise<string> {
+  const cookieStore = await cookies();
+  let playerName = cookieStore.get(PLAYER_NAME_COOKIE)?.value;
+
+  if (!playerName) {
+    playerName = `Player_${Math.floor(Math.random() * 10000)}`;
+    cookieStore.set(PLAYER_NAME_COOKIE, playerName, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: '/'
+    });
+  }
+
+  return playerName;
+}
+
+export async function setPlayerName(name: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(PLAYER_NAME_COOKIE, name, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: '/'
+  });
+}
+
+export async function getSessionHeaders() {
+  const playerId = await getOrCreatePlayerId();
+  const playerName = await getOrCreatePlayerName();
+
+  return {
+    'x-player-id': playerId,
+    'x-player-name': playerName,
+    'Content-Type': 'application/json'
+  };
+}
+
+# ====== ui/src/lib/utils.ts ======
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+
+# ====== ui/src/services/api.ts ======
+import {
+  ApiResponse,
+  CreateMatchResponse,
+  JoinMatchResponse,
+  MatchInfo,
+  GameSnapshot,
+  PlayCardData
+} from '@/types/backend';
+
+// Use relative URLs to call Next.js API routes
+// The session management is now handled server-side
+
+class ApiClient {
+  private baseUrl: string;
+
+  constructor() {
+    // Use relative URLs for Next.js API routes
+    this.baseUrl = '';
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        // Include cookies for session management
+        credentials: 'same-origin'
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || 'Request failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      return {
+        success: false,
+        error: {
+          code: 'REQUEST_FAILED',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        },
+        timestamp: Date.now()
+      };
+    }
+  }
+
+  // Match Management
+  async createMatch(): Promise<CreateMatchResponse | null> {
+    const response = await this.request<CreateMatchResponse>('/api/match/create', {
+      method: 'POST',
+    });
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
+
+  async joinMatch(matchId: string): Promise<JoinMatchResponse | null> {
+    const response = await this.request<JoinMatchResponse>('/api/match/join', {
+      method: 'POST',
+      body: JSON.stringify({ matchId }),
+    });
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
+
+  async getMatchInfo(matchId: string): Promise<MatchInfo | null> {
+    const response = await this.request<MatchInfo>(`/api/match/${matchId}`);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
+
+  async listMatches(): Promise<MatchInfo[]> {
+    const response = await this.request<{ matches: MatchInfo[] }>('/api/match/list');
+
+    if (response.success && response.data) {
+      return response.data.matches;
+    }
+    return [];
+  }
+
+  // Game Actions
+  async playCard(
+    matchId: string,
+    troopType: string,
+    position: { row: number; col: number }
+  ): Promise<boolean> {
+    const response = await this.request('/api/game/play_card', {
+      method: 'POST',
+      body: JSON.stringify({
+        matchId,
+        troopType,
+        position,
+      }),
+    });
+
+    return response.success;
+  }
+
+  async getGameState(matchId: string): Promise<GameSnapshot | null> {
+    const response = await this.request<GameSnapshot>(`/api/game/state/${matchId}`);
+
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return null;
+  }
+
+  async performGameAction(
+    matchId: string,
+    action: 'PAUSE' | 'RESUME' | 'SURRENDER'
+  ): Promise<boolean> {
+    const response = await this.request('/api/game/action', {
+      method: 'POST',
+      body: JSON.stringify({
+        matchId,
+        action,
+      }),
+    });
+
+    return response.success;
+  }
+
+  async getTroopTypes(): Promise<any[]> {
+    const response = await this.request<{ troops: any[] }>('/api/game/troops');
+
+    if (response.success && response.data) {
+      return response.data.troops;
+    }
+    return [];
+  }
+
+  // Note: Player ID and name are now managed server-side via cookies
+  // No need for client-side getters/setters
+}
+
+// Export singleton instance
+export const apiClient = new ApiClient();
+
+# ====== ui/src/services/gameClient.ts ======
+import { apiClient } from './api';
+import { WebSocketClient, ConnectionStatus } from './websocket';
+import {
+  GameSnapshot,
+  GameStatus,
+  PlayerState,
+  TroopData,
+  TowerData,
+  CreateMatchResponse,
+  JoinMatchResponse
+} from '@/types/backend';
+
+export interface GameClientOptions {
+  onSnapshot?: (snapshot: GameSnapshot) => void;
+  onStatusChange?: (status: ConnectionStatus) => void;
+  onGameEnd?: (winner: 'red' | 'blue' | 'draw') => void;
+  onError?: (error: Error) => void;
+}
+
+export class GameClient {
+  private wsClient: WebSocketClient;
+  private currentMatchId: string | null = null;
+  private currentSnapshot: GameSnapshot | null = null;
+  private playerState: PlayerState | null = null;
+  private options: GameClientOptions;
+  private isHost: boolean = false;
+
+  constructor(options: GameClientOptions = {}) {
+    this.options = options;
+
+    this.wsClient = new WebSocketClient({
+      onSnapshot: (snapshot) => this.handleSnapshot(snapshot),
+      onStatusChange: (status) => this.options.onStatusChange?.(status),
+      onError: (error) => this.options.onError?.(error),
+    });
+  }
+
+  // Match Management
+  async createMatch(): Promise<boolean> {
+    try {
+      const response = await apiClient.createMatch();
+      if (!response) {
+        throw new Error('Failed to create match');
+      }
+
+      this.currentMatchId = response.matchId;
+      this.isHost = true;
+
+      // Store player info if available
+      if (response.playerState) {
+        this.playerState = response.playerState;
+        sessionStorage.setItem('playerId', response.playerState.id);
+        sessionStorage.setItem('playerName', response.playerState.name);
+      }
+
+      // Connect to WebSocket
+      const wsUrl = this.buildWebSocketUrl(response.wsUrl);
+      this.wsClient.connect(wsUrl);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to create match:', error);
+      this.options.onError?.(error as Error);
+      return false;
+    }
+  }
+
+  async joinMatch(matchId: string): Promise<boolean> {
+    try {
+      const response = await apiClient.joinMatch(matchId);
+      if (!response) {
+        throw new Error('Failed to join match');
+      }
+
+      this.currentMatchId = matchId;
+      this.playerState = response.playerState;
+      this.isHost = false;
+
+      // Store player ID in sessionStorage for later use
+      if (response.playerState) {
+        sessionStorage.setItem('playerId', response.playerState.id);
+        sessionStorage.setItem('playerName', response.playerState.name);
+      }
+
+      // Connect to WebSocket
+      const wsUrl = this.buildWebSocketUrl(response.wsUrl);
+      this.wsClient.connect(wsUrl);
+
+      return true;
+    } catch (error) {
+      console.error('Failed to join match:', error);
+      this.options.onError?.(error as Error);
+      return false;
+    }
+  }
+
+  private buildWebSocketUrl(baseUrl: string): string {
+    // The WebSocket URL is now provided complete by the server
+    // It already includes the correct player ID and room ID
+    return baseUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+  }
+
+  // Game Actions
+  playCard(troopType: string, row: number, col: number): void {
+    if (!this.currentMatchId) {
+      console.error('No active match');
+      return;
+    }
+
+    // Check if player has enough elixir
+    if (this.playerState && !this.canPlayCard(troopType)) {
+      console.warn('Not enough elixir to play card');
+      return;
+    }
+
+    // Send via WebSocket for real-time update
+    this.wsClient.playCard(troopType, { row, col });
+
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.playCard(this.currentMatchId, troopType, { row, col });
+  }
+
+  private canPlayCard(troopType: string): boolean {
+    if (!this.playerState) return false;
+
+    // Check elixir cost (you'll need to import troop configs)
+    const troopCosts: Record<string, number> = {
+      'giant': 5,
+      'babyDragon': 4,
+      'miniPekka': 4,
+      'valkyrie': 4
+    };
+
+    const cost = troopCosts[troopType] || 0;
+    return this.playerState.elixir >= cost;
+  }
+
+  pauseGame(): void {
+    if (!this.currentMatchId) return;
+
+    this.wsClient.sendGameAction('PAUSE');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'PAUSE');
+  }
+
+  resumeGame(): void {
+    if (!this.currentMatchId) return;
+
+    this.wsClient.sendGameAction('RESUME');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'RESUME');
+  }
+
+  surrender(): void {
+    if (!this.currentMatchId) return;
+
+    this.wsClient.sendGameAction('SURRENDER');
+    // REST API backup disabled - endpoint doesn't exist
+    // apiClient.performGameAction(this.currentMatchId, 'SURRENDER');
+  }
+
+  // State Management
+  private handleSnapshot(snapshot: GameSnapshot): void {
+    this.currentSnapshot = snapshot;
+
+    // Update player state - get player ID from sessionStorage
+    const playerId = sessionStorage.getItem('playerId');
+    if (playerId) {
+      const player = snapshot.players.find(p => p.id === playerId);
+      if (player) {
+        this.playerState = player;
+      }
+    }
+
+    // Check for game end
+    if (snapshot.status === GameStatus.ENDED && snapshot.winner) {
+      this.options.onGameEnd?.(snapshot.winner);
+    }
+
+    // Forward to callback
+    this.options.onSnapshot?.(snapshot);
+  }
+
+  // Getters
+  getSnapshot(): GameSnapshot | null {
+    return this.currentSnapshot;
+  }
+
+  getTroops(): TroopData[] {
+    return this.currentSnapshot?.troops || [];
+  }
+
+  getTowers(): TowerData[] {
+    return this.currentSnapshot?.towers || [];
+  }
+
+  getPlayers(): PlayerState[] {
+    return this.currentSnapshot?.players || [];
+  }
+
+  getPlayerState(): PlayerState | null {
+    return this.playerState;
+  }
+
+  getPlayerTeam(): 'red' | 'blue' | null {
+    return this.playerState?.team || null;
+  }
+
+  getPlayerElixir(): number {
+    return this.playerState?.elixir || 0;
+  }
+
+  getGameStatus(): GameStatus | null {
+    return this.currentSnapshot?.status || null;
+  }
+
+  getGameTime(): number {
+    return this.currentSnapshot?.gameTime || 0;
+  }
+
+  getMatchId(): string | null {
+    return this.currentMatchId;
+  }
+
+  isConnected(): boolean {
+    return this.wsClient.isConnected();
+  }
+
+  getConnectionStatus(): ConnectionStatus {
+    return this.wsClient.getStatus();
+  }
+
+  // Cleanup
+  disconnect(): void {
+    this.wsClient.disconnect();
+    this.currentMatchId = null;
+    this.currentSnapshot = null;
+    this.playerState = null;
+    this.isHost = false;
+  }
+
+  destroy(): void {
+    this.disconnect();
+  }
+}
+
+// Export singleton for easy use
+export const gameClient = new GameClient();
+
+# ====== ui/src/services/websocket.ts ======
+import {
+  WSMessage,
+  WSMessageType,
+  GameSnapshot,
+  PlayCardData
+} from '@/types/backend';
+
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export interface WebSocketOptions {
+  onSnapshot?: (snapshot: GameSnapshot) => void;
+  onStatusChange?: (status: ConnectionStatus) => void;
+  onError?: (error: Error) => void;
+  onMessage?: (message: WSMessage) => void;
+}
+
+export class WebSocketClient {
+  private ws: WebSocket | null = null;
+  private url: string = '';
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private pingInterval: NodeJS.Timeout | null = null;
+  private status: ConnectionStatus = 'disconnected';
+  private options: WebSocketOptions;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000; // Start with 1 second
+
+  constructor(options: WebSocketOptions = {}) {
+    this.options = options;
+  }
+
+  connect(wsUrl: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      console.warn('WebSocket already connected');
+      return;
+    }
+
+    this.url = wsUrl;
+    this.reconnectAttempts = 0;
+    this.establishConnection();
+  }
+
+  private establishConnection(): void {
+    try {
+      this.updateStatus('connecting');
+      this.ws = new WebSocket(this.url);
+
+      this.ws.onopen = () => {
+        console.log('WebSocket connected');
+        this.updateStatus('connected');
+        this.reconnectAttempts = 0;
+        this.reconnectDelay = 1000;
+        this.startPingInterval();
+      };
+
+      this.ws.onmessage = (event) => {
+        try {
+          const message: WSMessage = JSON.parse(event.data);
+          this.handleMessage(message);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        this.updateStatus('error');
+        this.options.onError?.(new Error('WebSocket connection error'));
+      };
+
+      this.ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        this.updateStatus('disconnected');
+        this.stopPingInterval();
+        this.attemptReconnect();
+      };
+    } catch (error) {
+      console.error('Failed to establish WebSocket connection:', error);
+      this.updateStatus('error');
+      this.attemptReconnect();
+    }
+  }
+
+  private handleMessage(message: WSMessage): void {
+    this.options.onMessage?.(message);
+
+    switch (message.type) {
+      case WSMessageType.GAME_SNAPSHOT:
+        if (message.data?.snapshot) {
+          this.options.onSnapshot?.(message.data.snapshot);
+        }
+        break;
+
+      case WSMessageType.ERROR:
+        console.error('Server error:', message.data);
+        this.options.onError?.(new Error(message.data?.message || 'Server error'));
+        break;
+
+      case WSMessageType.PONG:
+        // Heartbeat response received
+        break;
+
+      default:
+        // Handle other message types if needed
+        break;
+    }
+  }
+
+  private attemptReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('Max reconnection attempts reached');
+      this.updateStatus('error');
+      return;
+    }
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
+
+    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+    this.reconnectTimeout = setTimeout(() => {
+      this.establishConnection();
+    }, delay);
+  }
+
+  private startPingInterval(): void {
+    this.stopPingInterval();
+    this.pingInterval = setInterval(() => {
+      this.sendPing();
+    }, 30000); // Ping every 30 seconds
+  }
+
+  private stopPingInterval(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  private sendPing(): void {
+    this.send({
+      type: WSMessageType.PING,
+      timestamp: Date.now()
+    });
+  }
+
+  private updateStatus(status: ConnectionStatus): void {
+    this.status = status;
+    this.options.onStatusChange?.(status);
+  }
+
+  send(message: WSMessage): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      console.warn('Cannot send message: WebSocket not connected');
+      return;
+    }
+
+    try {
+      this.ws.send(JSON.stringify(message));
+    } catch (error) {
+      console.error('Failed to send WebSocket message:', error);
+    }
+  }
+
+  playCard(troopType: string, position: { row: number; col: number }): void {
+    this.send({
+      type: WSMessageType.PLAY_CARD,
+      timestamp: Date.now(),
+      data: {
+        troopType,
+        position
+      } as PlayCardData
+    });
+  }
+
+  sendGameAction(action: string): void {
+    this.send({
+      type: WSMessageType.GAME_ACTION,
+      timestamp: Date.now(),
+      data: { action }
+    });
+  }
+
+  disconnect(): void {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    this.stopPingInterval();
+
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+
+    this.updateStatus('disconnected');
+  }
+
+  getStatus(): ConnectionStatus {
+    return this.status;
+  }
+
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+# ====== ui/src/types/backend.ts ======
+// Types shared with backend server
+
+export interface Position {
+  row: number;
+  col: number;
+}
+
+export enum TroopState {
+  SPAWNING = 'SPAWNING',
+  MOVING_TO_BRIDGE = 'MOVING_TO_BRIDGE',
+  TARGETING_TOWER = 'TARGETING_TOWER',
+  ATTACKING_TOWER = 'ATTACKING_TOWER',
+  DEAD = 'DEAD'
+}
+
+export interface TroopData {
+  id: string;
+  type: string;
+  team: 'red' | 'blue';
+  position: Position;
+  targetPosition: Position;
+  state: TroopState;
+  health: number;
+  maxHealth: number;
+  speed: number;
+  isAlive: boolean;
+  bridgeTarget?: Position;
+  towerTarget?: string;
+  isInCombat: boolean;
+  attackDamage: number;
+  attackSpeed: number;
+  lastAttackTime: number;
+  focusOnBuildings: boolean;
+  flying: boolean;
+  row: number;
+  col: number;
+  spawnTime: number;
+  lastUpdateTime: number;
+}
+
+export interface TowerData {
+  id: string;
+  type: 'king' | 'princess';
+  team: 'red' | 'blue';
+  position: Position;
+  health: number;
+  maxHealth: number;
+  isAlive: boolean;
+  active: boolean;
+  damage: number;
+  attackSpeed: number;
+  range: number;
+  lastAttackTime: number;
+}
+
+export enum GameStatus {
+  WAITING = 'WAITING',
+  STARTING = 'STARTING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  PAUSED = 'PAUSED',
+  ENDED = 'ENDED'
+}
+
+export interface PlayerState {
+  id: string;
+  name: string;
+  team: 'red' | 'blue';
+  isConnected: boolean;
+  elixir: number;
+  maxElixir: number;
+  elixirRegenRate: number;
+  crowns: number;
+  lastActionTime: number;
+}
+
+export interface GameSnapshot {
+  timestamp: number;
+  tick: number;
+  status: GameStatus;
+  gameTime: number;
+  troops: TroopData[];
+  towers: TowerData[];
+  players: PlayerState[];
+  winner?: 'red' | 'blue' | 'draw';
+  endReason?: string;
+}
+
+// API Response types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+  timestamp: number;
+}
+
+export interface CreateMatchResponse {
+  matchId: string;
+  joinToken: string;
+  wsUrl: string;
+  playerState?: PlayerState; // Optional to maintain backward compatibility
+}
+
+export interface JoinMatchResponse {
+  matchId: string;
+  team: 'red' | 'blue';
+  wsUrl: string;
+  playerState: PlayerState;
+}
+
+export interface MatchInfo {
+  id: string;
+  playerCount: number;
+  maxPlayers: number;
+  status: GameStatus;
+  createdAt: number;
+  startedAt?: number;
+  players: Array<{
+    id: string;
+    name: string;
+    team: 'red' | 'blue';
+    isConnected: boolean;
+  }>;
+}
+
+// WebSocket message types
+export enum WSMessageType {
+  // Client -> Server
+  JOIN_ROOM = 'JOIN_ROOM',
+  LEAVE_ROOM = 'LEAVE_ROOM',
+  PLAY_CARD = 'PLAY_CARD',
+  GAME_ACTION = 'GAME_ACTION',
+  PING = 'PING',
+
+  // Server -> Client
+  ROOM_JOINED = 'ROOM_JOINED',
+  ROOM_LEFT = 'ROOM_LEFT',
+  GAME_SNAPSHOT = 'GAME_SNAPSHOT',
+  GAME_EVENT = 'GAME_EVENT',
+  ERROR = 'ERROR',
+  PONG = 'PONG'
+}
+
+export interface WSMessage {
+  type: WSMessageType;
+  timestamp: number;
+  data?: any;
+}
+
+export interface PlayCardData {
+  troopType: string;
+  position: Position;
+}
