@@ -18,7 +18,15 @@ export class WSManager {
   private heartbeatInterval: NodeJS.Timeout | null = null;
 
   constructor(server: any) {
-    this.wss = new WebSocketServer({ server });
+    const wsOptions: any = { server };
+
+    // Add optional path support for production environments
+    if (process.env.WS_PATH) {
+      wsOptions.path = process.env.WS_PATH;
+      console.log(`WebSocket server configured with path: ${process.env.WS_PATH}`);
+    }
+
+    this.wss = new WebSocketServer(wsOptions);
     this.setupWebSocketServer();
     this.startHeartbeat();
     console.log(`WebSocket server attached to HTTP server`);

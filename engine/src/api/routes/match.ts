@@ -35,7 +35,9 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         return res.status(500).json(response);
       }
 
-      const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${room.id}&playerId=${req.playerId}`;
+      const wsUrl = process.env.PUBLIC_WS_URL
+        ? `${process.env.PUBLIC_WS_URL}?roomId=${room.id}&playerId=${req.playerId}`
+        : `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${room.id}&playerId=${req.playerId}`;
 
       // Include playerState in the response
       const response: ApiResponse<CreateMatchResponse & { playerState: typeof playerState }> = {
@@ -102,7 +104,9 @@ export function createMatchRoutes(wsManager: WSManager): Router {
         const existingPlayer = roomInfo.players.find(p => p.id === req.playerId);
         if (existingPlayer) {
           console.log(`[API /join] Player ${req.playerId} already in room, returning existing state`);
-          const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
+          const wsUrl = process.env.PUBLIC_WS_URL
+            ? `${process.env.PUBLIC_WS_URL}?roomId=${matchId}&playerId=${req.playerId}`
+            : `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
 
           const response: ApiResponse<JoinMatchResponse> = {
             success: true,
@@ -148,7 +152,9 @@ export function createMatchRoutes(wsManager: WSManager): Router {
 
         console.log(`[API /join] Successfully added player ${req.playerId} to room ${matchId} on team ${playerState.team}`);
 
-        const wsUrl = `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
+        const wsUrl = process.env.PUBLIC_WS_URL
+          ? `${process.env.PUBLIC_WS_URL}?roomId=${matchId}&playerId=${req.playerId}`
+          : `ws://${req.hostname}:${process.env.WS_PORT || 3001}?roomId=${matchId}&playerId=${req.playerId}`;
 
         const response: ApiResponse<JoinMatchResponse> = {
           success: true,

@@ -59,7 +59,8 @@ app.get('/api', (_req, res) => {
       }
     },
     websocket: {
-      url: `ws://localhost:${WS_PORT}`,
+      url: process.env.PUBLIC_WS_URL || `ws://localhost:${WS_PORT}`,
+      path: process.env.WS_PATH || '/',
       params: {
         roomId: 'Match room ID',
         playerId: 'Player ID'
@@ -180,7 +181,7 @@ httpServer.listen(PORT, () => {
 ╚════════════════════════════════════════════╝
 
 🌐 HTTP Server:    http://localhost:${PORT}
-🔌 WebSocket:      ws://localhost:${WS_PORT}
+🔌 WebSocket:      ${process.env.PUBLIC_WS_URL || `ws://localhost:${WS_PORT}`}
 🎯 Environment:    ${process.env.NODE_ENV || 'development'}
 ⏱️  Tick Rate:      ${SERVER_CONFIG.TICK_RATE} Hz
 👥 Max Players:    ${SERVER_CONFIG.MAX_PLAYERS_PER_ROOM} per room
