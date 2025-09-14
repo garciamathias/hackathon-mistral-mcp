@@ -1,182 +1,43 @@
 
-# ====== ui/src/app/api/game/init/route.ts ======
-import { NextResponse } from 'next/server';
+# ====== ui/src/app/api/game/[id]/state/route.ts ======
+import { NextResponse } from "next/server";
+import { getGame, updateGameTime } from "@/lib/gameStore";
 
-const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+export async function GET(_: Request, { params }: { params: { id: string } }) {
+  const game = getGame(params.id);
+  if (!game) return NextResponse.json({ error: "Game not found" }, { status: 404 });
+  
+  // Mettre à jour le temps et l'elixir avant de retourner l'état
+  const updatedGame = updateGameTime(params.id);
+  if (!updatedGame) return NextResponse.json({ error: "Game not found" }, { status: 404 });
+  
+  return NextResponse.json(updatedGame);
+}
+
+
+# ====== ui/src/app/api/game/init/route.ts ======
+import { NextResponse } from "next/server";
+import { createGame } from "@/lib/gameStore";
 
 export async function POST() {
-  try {
-    const response = await fetch(`${MCP_SERVER_URL}/api/game/init`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`MCP server responded with ${response.status}`);
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Error initializing game:', error);
-    return NextResponse.json(
-      { error: 'Failed to initialize game' },
-      { status: 500 }
-    );
-  }
+  const game = createGame();
+  return NextResponse.json({ game_id: game.game_id, message: "Game initialized" });
 }
 
 # ====== ui/src/app/api/game/spawn/route.ts ======
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import { spawnTroop } from "@/lib/gameStore";
 
-const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+export async function POST(req: Request) {
+  const { game_id, troop_type, position, team } = await req.json();
+  const game = spawnTroop(game_id, troop_type, team, position);
+  if (!game) return NextResponse.json({ error: "Game not found or invalid" }, { status: 400 });
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    // Log what we're sending to the Python server
-    console.log('=== SPAWN REQUEST TO PYTHON SERVER ===');
-    console.log('URL:', `${MCP_SERVER_URL}/api/game/spawn`);
-    console.log('Body:', JSON.stringify(body, null, 2));
-
-    const response = await fetch(`${MCP_SERVER_URL}/api/game/spawn`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-    console.log('Python server response status:', response.status);
-    console.log('Python server response:', responseText);
-
-    // Try to parse as JSON
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse response as JSON:', responseText);
-      return NextResponse.json(
-        { error: 'Invalid response from server', details: responseText },
-        { status: 500 }
-      );
-    }
-
-    if (!response.ok) {
-      console.error('Python server returned error:', data);
-      // Return the actual error from Python server
-      return NextResponse.json(data, { status: response.status });
-    }
-
-    console.log('Spawn successful:', data);
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Error in spawn route:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to spawn troop',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-  }
-}
-
-# ====== ui/src/app/api/game/state/route.ts ======
-import { NextRequest, NextResponse } from 'next/server';
-
-const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
-
-export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const gameId = searchParams.get('game_id');
-
-  if (!gameId) {
-    return NextResponse.json(
-      { error: 'game_id is required' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const response = await fetch(`${MCP_SERVER_URL}/api/game/${gameId}/state`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`MCP server responded with ${response.status}`);
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Error getting game state:', error);
-    return NextResponse.json(
-      { error: 'Failed to get game state' },
-      { status: 500 }
-    );
-  }
-}
-
-# ====== ui/src/app/api/game/sync/route.ts ======
-import { NextRequest, NextResponse } from 'next/server';
-
-const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'http://localhost:8000';
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-
-    console.log('=== SYNC REQUEST TO PYTHON SERVER ===');
-    console.log('Game ID:', body.game_id);
-    console.log('Troops count:', body.troops?.length || 0);
-    console.log('Game over:', body.is_game_over);
-
-    // Send state to Python server and get AI actions
-    const response = await fetch(`${MCP_SERVER_URL}/sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        game_id: body.game_id,
-        troops: body.troops || [],
-        towers: body.towers || {},
-        is_game_over: body.is_game_over || false,
-        winner: body.winner || null,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Python server error:', errorText);
-      return NextResponse.json(
-        { error: 'Failed to sync with Python server' },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-
-    console.log('=== SYNC RESPONSE FROM PYTHON SERVER ===');
-    console.log('AI actions:', data.ai_actions?.length || 0);
-    console.log('Tactical analysis:', data.tactical_analysis);
-
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Error in /api/game/sync:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({
+    success: true,
+    message: `Spawned ${troop_type} for team ${team}`,
+    state: game,
+  });
 }
 
 # ====== ui/src/app/api/mcp/[transport]/route.ts ======
@@ -261,453 +122,390 @@ export async function POST(req: NextRequest) {
 
 export function GET() { return NextResponse.json({ ok: true, endpoint: "MCP streamable" }); }
 
-# ====== ui/src/game/ServerSyncEngine.ts ======
-import { GameEngine } from './GameEngine';
-import { TroopType } from './types/Troop';
+# ====== ui/src/app/arena/page.tsx ======
+"use client";
 
-export interface ServerGameState {
-  game_id: string;
-  troops: Array<{
-    id: string;
-    type: string;
-    team: string;
-    position: { row: number; col: number };
-    health: number;
-    max_health: number;
-  }>;
-  towers: Record<string, {
-    id: string;
-    team: string;
-    type: string;
-    health: number;
-    max_health: number;
-    position: { row: number; col: number };
-  }>;
-  elixir: { red: number; blue: number };
-  available_cards: string[];
-  game_time: number;
-  tactical_analysis: string;
-  is_game_over: boolean;
-  winner: string | null;
+import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from "react";
+import TowerHealthBar from "@/components/TowerHealthBar";
+import ClashTimer from "@/components/ClashTimer";
+import GameEndScreen from "@/components/GameEndScreen";
+import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
+import { useSearchParams, useRouter } from "next/navigation";
+import { GameState } from "@/lib/gameStore";
+
+export default function Arena() {
+  const showGrid = false;
+  const numRows = 34;
+  const numCols = 18;
+
+  const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
+  const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
+  const router = useRouter();
+  const params = useSearchParams();
+  const gameId = params.get("game_id");
+  const [gameState, setGameState] = useState<GameState | null>(null);
+
+  const isArenaVisible = true;
+
+  // Tour visuals (pour flags + sprites)
+  const TOWER = React.useMemo(() => ({
+    KING_RED: {
+      id: 'king_red', name: 'King Red', image: '/images/towers/king_red.png',
+      row: 2, col: 8, size: 6.5, offsetX: 1.4, offsetY: -2.8, team: 'red', type: 'king',
+      flagged_cells: [[1,7],[1,8],[1,9],[1,10],[2,10],[2,9],[2,8],[2,7],[3,7],[3,8],[3,9],[3,10],[4,10],[4,9],[4,8],[4,7]],
+      active: true,
+    },
+    PRINCESS_RED_1: {
+      id: 'princess_red_left', name: 'Princess Red', image: '/images/towers/princess_red.png',
+      row: 6, col: 3, size: 4, offsetX: -0.7, offsetY: -3.3, team: 'red', type: 'princess',
+      flagged_cells: [[5,2],[5,3],[5,4],[6,4],[7,4],[7,3],[7,2],[6,2],[6,3]], active: true,
+    },
+    PRINCESS_RED_2: {
+      id: 'princess_red_right', name: 'Princess Red', image: '/images/towers/princess_red.png',
+      row: 6, col: 14, size: 4, offsetX: 0, offsetY: -3.3, team: 'red', type: 'princess',
+      flagged_cells: [[5,13],[5,14],[5,15],[6,15],[6,14],[6,13],[7,13],[7,14],[7,15]], active: true,
+    },
+    PRINCESS_BLUE_1: {
+      id: 'princess_blue_left', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
+      row: 27, col: 3, size: 7.4, offsetX: -0.4, offsetY: -2, team: 'blue', type: 'princess',
+      flagged_cells: [[26,2],[26,3],[26,4],[27,4],[27,3],[27,2],[28,2],[28,3],[28,4]], active: true,
+    },
+    PRINCESS_BLUE_2: {
+      id: 'princess_blue_right', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
+      row: 27, col: 14, size: 7.4, offsetX: 0, offsetY: -2, team: 'blue', type: 'princess',
+      flagged_cells: [[26,13],[26,14],[26,15],[27,15],[27,14],[27,13],[28,13],[28,14],[28,15]], active: true,
+    },
+    KING_BLUE: {
+      id: 'king_blue', name: 'King Blue', image: '/images/towers/king_blue.png',
+      row: 31, col: 8, size: 6.5, offsetX: 1, offsetY: -2, team: 'blue', type: 'king',
+      flagged_cells: [[30,7],[31,7],[32,7],[33,7],[33,8],[32,8],[31,8],[30,8],[30,9],[30,10],[31,10],[31,9],[32,9],[32,10],[33,10],[33,9]],
+      active: true,
+    }
+  }), []);
+
+  // Si pas d'ID -> retour au menu
+  useEffect(() => {
+    if (!gameId) router.replace("/");
+  }, [gameId, router]);
+
+  // Poller l'état du jeu
+  useEffect(() => {
+    if (!gameId) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/game/${gameId}/state`);
+        const data = await res.json();
+        setGameState(data);
+      } catch (error) {
+        console.error("Failed to fetch game state:", error);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [gameId]);
+
+  const handleCardDragStart = (troopType: TroopType) => setDraggedCard({ troopType, team: currentTeam });
+  const handleCardDragEnd = () => setDraggedCard(null);
+  
+  const handleCellDrop = async (row: number, col: number, e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedCard && gameId) {
+      try {
+        await fetch("/api/game/spawn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            game_id: gameId,
+            troop_type: draggedCard.troopType,
+            position: { row, col },
+            team: draggedCard.team,
+          }),
+        });
+        setDraggedCard(null);
+      } catch (error) {
+        console.error("Failed to spawn troop:", error);
+      }
+    }
+  };
+  
+  const handleCellDragOver = (e: React.DragEvent) => e.preventDefault();
+  const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
+
+  const getTroopGifPath = (troop: any) => {
+    const config = TROOP_CONFIGS[troop.type as TroopType];
+    if (!config) return null;
+    // Pour l'instant, utiliser les chemins de marche par défaut
+    const gifType = troop.team === 'red' ? 'player' : 'opponent';
+    return `${config.gifPaths.walk[gifType]}?v=${troop.id}`;
+  };
+
+  const handleRestart = () => {
+    router.push("/");
+  };
+
+  if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
+  if (!gameState) return <div>Loading game...</div>;
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
+      <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
+
+      {gameState.is_game_over && gameState.winner && <GameEndScreen winner={gameState.winner as "red" | "blue"} onRestart={handleRestart} />}
+
+      <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
+        <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
+
+        <div className="absolute inset-0 pl-[10%] pr-[9.8%] pt-[27.8%] pb-[34.2%]">
+          <div className={`w-full h-full grid gap-0`} style={{ gridTemplateColumns: `repeat(${numCols}, 1fr)`, gridTemplateRows: `repeat(${numRows}, 1fr)` }}>
+            {Array.from({ length: numRows * numCols }, (_, index) => {
+              const row = Math.floor(index / numCols);
+              const col = index % numCols;
+              const isEven = (row + col) % 2 === 0;
+              const towerPosition = Object.values(TOWER).find(pos => row === pos.row && col === pos.col);
+              const shouldShowTower = !!towerPosition;
+              const tower = towerPosition || null;
+
+              return (
+                <div
+                  key={index}
+                  className={`w-full h-full transition-all duration-200 relative ${!showGrid ? 'bg-transparent' : 'bg-black/20'}
+                    ${
+                      draggedCard 
+                        ? `cursor-crosshair ${draggedCard.team === 'red' ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'}`
+                        : 'cursor-default'
+                    } ${
+                      isEven ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                             : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
+                    }`}
+                  onDrop={(e) => handleCellDrop(row, col, e)}
+                  onDragOver={handleCellDragOver}
+                >
+                  {shouldShowTower && (() => {
+                    const engineTower = gameState.towers[tower!.id];
+                    const dead = engineTower && engineTower.health <= 0;
+                    if (dead) return null;
+
+                    return (
+                      <>
+                        <img
+                          src={tower!.image}
+                          alt={tower!.name}
+                          className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
+                          style={{ transform: `scale(${tower!.size}) translate(${tower!.offsetX}px, ${tower!.offsetY}px)` }}
+                        />
+                        <div
+                          className="absolute z-20 pointer-events-none"
+                          style={{
+                            left: `${(tower as any).offsetX - 16}px`,
+                            top: `${
+                              (tower as any).type === 'king'
+                                ? ((tower as any).team === 'blue' ? 20 : -60)
+                                : ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)
+                            }px`,
+                          }}
+                        >
+                          {(() => {
+                            const t = engineTower;
+                            const currentHealth = t?.health || ((tower as any).type === 'king' ? 4825 : 3052);
+                            const maxHealth = t?.max_health || ((tower as any).type === 'king' ? 4825 : 3052);
+                            return <TowerHealthBar currentHealth={currentHealth} maxHealth={maxHealth} team={(tower as any).team} />;
+                          })()}
+                        </div>
+                      </>
+                    );
+                  })()}
+
+                  {gameState.troops
+                    .filter(troop => Math.floor(troop.position.row) === row && Math.floor(troop.position.col) === col)
+                    .map(troop => {
+                      const gifPath = getTroopGifPath(troop);
+                      const config = TROOP_CONFIGS[troop.type as TroopType];
+                      if (!gifPath || !config) return null;
+                      return (
+                        <div
+                          key={troop.id}
+                          className="absolute z-20 w-full h-full flex items-center justify-center pointer-events-none"
+                          style={{ transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)` }}
+                        >
+                          <img
+                            key={`${troop.id}-walk`}
+                            src={gifPath}
+                            alt={`${troop.type} ${troop.team}`}
+                            className="w-12 h-12 object-contain"
+                            style={{
+                              transform: `scale(${typeof config.scale === 'object' ? config.scale.walk : config.scale})`,
+                            }}
+                          />
+                          <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
+                            <div
+                              className={`h-full rounded transition-all duration-200 ${troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
+                              style={{ width: `${(troop.health / troop.max_health) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="absolute top-4 right-4 z-10">
+          <ClashTimer />
+        </div>
+
+        {/* Barre de cartes */}
+        <div className="fixed bottom-0 left-0 right-0 z-10">
+          <div className="flex justify-center items-end pb-4">
+            <div className="relative w-[80%] max-w-md">
+              <img src="/images/cards/more/card_box.png" alt="Card Box" className="w-full h-44 object-fill rounded-t-lg" />
+              <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
+                {/* Baby Dragon */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/BabyDragonCard.png" alt={`${currentTeam} Baby Dragon`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
+
+                {/* Mini PEKKA */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/MiniPEKKACard.png" alt={`${currentTeam} Mini PEKKA`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
+
+                {/* Giant */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.GIANT)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/GiantCard.png" alt={`${currentTeam} Giant`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
+
+                {/* Valkyrie */}
+                <div
+                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
+                    !gameState ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
+                  }`}
+                  draggable={!!gameState}
+                  onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
+                  onDragEnd={handleCardDragEnd}
+                >
+                  <img src="/images/cards/more/ValkyrieCard.png" alt={`${currentTeam} Valkyrie`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contrôles */}
+      <div className="absolute top-4 left-4 z-10 space-y-2">
+        <Button
+          variant="secondary"
+          className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
+            currentTeam === 'red' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+          }`}
+          onClick={switchTeam}
+        >
+          Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
+        </Button>
+
+        <div className="text-center">
+          <div className="bg-black/50 rounded-lg p-3 border border-white/20">
+            <p className="text-white text-sm font-medium">
+              Drag cards from the bottom to spawn {currentTeam} troops
+            </p>
+            <p className="text-gray-300 text-xs mt-1">Switch team with the button above</p>
+            <p className="text-yellow-400 text-xs mt-1">
+              Elixir: {currentTeam === 'red' ? gameState.elixir.red : gameState.elixir.blue}/10
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export class ServerSyncEngine extends GameEngine {
-  private gameId: string | null = null;
-  private syncInterval: NodeJS.Timeout | null = null;
-  private isAIMode: boolean = false;
-  private serverUrl: string;
+# ====== ui/src/app/page.tsx ======
+"use client";
 
-  constructor(serverUrl?: string) {
-    super();
-    this.serverUrl = serverUrl || process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
-  }
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import TransitionScreen from "@/components/TransitionScreen";
 
-  public setOnUpdate(callback: (troops: any[]) => void): void {
-    this.onUpdateCallback = callback;
-  }
+export default function Home() {
+  const [showTransition, setShowTransition] = useState(false);
+  const router = useRouter();
 
-  public setOnGameEnd(callback: (winner: 'red' | 'blue') => void): void {
-    this.onGameEndCallback = callback;
-  }
-
-  // Override start method to use our own gameLoop without time increment
-  public start(): void {
-    if (this.gameState.isRunning) {
-      return;
-    }
-
-    this.gameState.isRunning = true;
-    this.gameState.lastUpdateTime = performance.now();
-    
-    // Use our custom gameLoop that doesn't increment time locally
-    this.serverGameLoop();
-  }
-
-  // Custom gameLoop that doesn't increment time locally
-  private serverGameLoop = () => {
-    if (!this.gameState.isRunning) {
-      return;
-    }
-
-    const currentTime = performance.now();
-    const deltaTime = (currentTime - this.gameState.lastUpdateTime) / 1000; // Convert to seconds
-    
-    this.update(deltaTime);
-    
-    this.gameState.lastUpdateTime = currentTime;
-    // 🚀 Pas d'incrémentation locale du temps - on se fie au serveur
-    
-    // Utiliser setTimeout pour l'environnement serveur, requestAnimationFrame pour le client
-    if (typeof window !== 'undefined') {
-      (this as any).animationFrameId = requestAnimationFrame(this.serverGameLoop);
-    } else {
-      // Environnement serveur - utiliser setTimeout
-      setTimeout(() => {
-        this.serverGameLoop();
-      }, 16); // ~60 FPS
+  const handleCombatClick = async () => {
+    try {
+      const res = await fetch("/api/game/init", { method: "POST" });
+      const { game_id } = await res.json();
+      router.push(`/arena?game_id=${game_id}`);
+    } catch (error) {
+      console.error("Failed to create game:", error);
     }
   };
 
-  // Override problematic methods from GameEngine
-  protected cleanupDeadTroops(): void {
-    // Don't delete troops locally, let server manage lifecycle
-    // But we still need to mark them as dead locally
-    const deadTroops = Array.from(this.troops.entries())
-      .filter(([, troop]) => {
-        if (!troop || !troop.data) {
-          console.warn('Troop missing data property:', troop);
-          return false;
-        }
-        return !troop.data.isAlive;
-      })
-      .map(([id, ]) => id);
+  return (
+    <>
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        {/* Fond flou */}
+        <img
+          src="/images/backgrounds/goal.png"
+          alt="Goal Background Blurred"
+          className="absolute inset-0 w-full h-full object-cover blur-sm"
+        />
+        
+        {/* Container avec ratio 9/16 */}
+        <div className="relative w-[56.25vh] h-screen max-w-full max-h-screen z-10">
+          <img
+            src="/images/backgrounds/goal.png"
+            alt="Goal Background"
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Bouton jouer stylisé */}
+          <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center">
+            <Button 
+              onClick={handleCombatClick}
+              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-10 px-7 rounded-2xl text-2xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
+            >
+              Combat
+            </Button>
+          </div>
+        </div>
+      </div>
 
-    for (const id of deadTroops) {
-      // Instead of deleting, just mark as dead
-      const troop = this.troops.get(id);
-      if (troop && troop.data) {
-        troop.data.isAlive = false;
-      }
-    }
-  }
-
-  // Remove the update() override - let parent class handle game logic
-  // This allows troops to move locally using the existing GameEngine logic
-
-  public async initializeServerGame(aiMode: boolean = false): Promise<string> {
-    this.isAIMode = aiMode;
-
-    try {
-      const response = await fetch('/api/game/init', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to initialize game');
-      }
-
-      const data = await response.json();
-      this.gameId = data.game_id;
-
-      // Start syncing with server
-      this.startServerSync();
-
-      return this.gameId!;
-    } catch (error) {
-      console.error('Error initializing server game:', error);
-      throw error;
-    }
-  }
-
-  private startServerSync(): void {
-    if (!this.gameId) return;
-
-    console.log('🔄 Starting server sync polling for game:', this.gameId);
-
-    // Poll every 500ms for updates
-    this.syncInterval = setInterval(() => {
-      console.log('⏰ Polling server for updates...');
-      this.syncWithServer();
-    }, 500);
-  }
-
-  private async syncWithServer(): Promise<void> {
-    if (!this.gameId) return;
-
-    try {
-      const response = await fetch(`/api/game/state?game_id=${this.gameId}`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch game state');
-      }
-
-      const state: ServerGameState = await response.json();
-      console.log('📦 Received server state:', {
-        troopCount: state.troops?.length || 0,
-        towerCount: Object.keys(state.towers || {}).length,
-        gameTime: state.game_time,
-        troops: state.troops
-      });
-      this.updateLocalState(state);
-    } catch (error) {
-      console.error('Error syncing with server:', error);
-    }
-  }
-
-  private updateLocalState(serverState: ServerGameState): void {
-    console.log('🔄 updateLocalState called with:', {
-      hasTroops: !!serverState.troops,
-      troopCount: serverState.troops?.length || 0
-    });
-
-    // Track existing troop IDs
-    const existingTroopIds = new Set(this.troops.keys());
-    const serverTroopIds = new Set(serverState.troops?.map(t => t.id) || []);
-
-    // Convert server troop type format (UPPER_SNAKE_CASE) to UI format (camelCase)
-    const convertTroopType = (serverType: string): string => {
-      const typeMap: Record<string, string> = {
-        'GIANT': 'giant',
-        'BABY_DRAGON': 'babyDragon',
-        'MINI_PEKKA': 'miniPekka',
-        'VALKYRIE': 'valkyrie'
-      };
-      return typeMap[serverType] || serverType.toLowerCase();
-    };
-
-    // Update troops from server (check if troops exists)
-    if (serverState.troops && Array.isArray(serverState.troops)) {
-      console.log('📊 Processing troops from server:', serverState.troops.length);
-
-      serverState.troops.forEach(serverTroop => {
-        // Check if this troop already exists locally
-        if (this.troops.has(serverTroop.id)) {
-          // Troop exists - just update health from server
-          const existingTroop = this.troops.get(serverTroop.id);
-          if (existingTroop && existingTroop.data) {
-            existingTroop.data.health = serverTroop.health;
-            existingTroop.data.isAlive = serverTroop.health > 0;
-            console.log(`📝 Updated existing troop ${serverTroop.id} health: ${serverTroop.health}`);
-          }
-        } else {
-          // New troop from server - spawn it locally
-          console.log(`🆕 New troop from server: ${serverTroop.id}`);
-
-          // Convert server troop type to UI format
-          const uiTroopType = convertTroopType(serverTroop.type);
-
-          // Spawn the troop using the parent GameEngine's spawnTroop method
-          // This will create a proper troop entity with all the movement logic
-          const troopId = super.spawnTroop(
-            uiTroopType as TroopType,
-            serverTroop.team as 'red' | 'blue',
-            serverTroop.position.row,
-            serverTroop.position.col
-          );
-
-          // Replace the auto-generated ID with the server ID
-          const spawnedTroop = this.troops.get(troopId);
-          if (spawnedTroop) {
-            this.troops.delete(troopId);
-            this.troops.set(serverTroop.id, spawnedTroop);
-            if (spawnedTroop.data) {
-              spawnedTroop.data.id = serverTroop.id;
-              spawnedTroop.data.health = serverTroop.health;
-              spawnedTroop.data.maxHealth = serverTroop.max_health || 100;
-            }
-          }
-
-          console.log('🎮 Spawned new troop locally:', {
-            id: serverTroop.id,
-            type: uiTroopType,
-            team: serverTroop.team,
-            position: serverTroop.position
-          });
-        }
-      });
-
-      // Remove troops that are no longer on the server
-      for (const localId of existingTroopIds) {
-        if (!serverTroopIds.has(localId)) {
-          console.log(`🗑️ Removing troop ${localId} (no longer on server)`);
-          this.troops.delete(localId);
-        }
-      }
-
-      console.log(`✅ Total troops in map: ${this.troops.size}`);
-    } else {
-      console.log('⚠️ No troops in server state or troops not an array');
-    }
-
-    // Update towers
-    if (serverState.towers && typeof serverState.towers === 'object') {
-      Object.entries(serverState.towers).forEach(([towerId, towerData]: any) => {
-        const existingTower = this.getTowerEntity(towerId);
-        if (!existingTower) {
-          // créer la tour localement si absente
-          this.addTower(
-            towerData.id,
-            (towerData.type as 'king' | 'princess'),
-            (towerData.team as 'red' | 'blue'),
-            towerData.position.row,
-            towerData.position.col
-          );
-        }
-        const towerEnt = this.getTowerEntity(towerId);
-        if (towerEnt && towerEnt.data) {
-          (towerEnt.data as any).health = towerData.health;
-          (towerEnt.data as any).maxHealth = towerData.max_health;
-          (towerEnt.data as any).isAlive = towerData.health > 0;
-          (towerEnt.data as any).active = towerData.health > 0;
-        }
-      });
-    }
-
-    // Update game state
-    if (serverState.is_game_over && serverState.winner) {
-      this.handleGameEnd(serverState.winner as 'red' | 'blue');
-    }
-
-    // 🚀 On se fie au serveur pour le temps et les stats
-    this.gameState = {
-      ...this.gameState,
-      gameTime: serverState.game_time ?? 0,
-    };
-
-    // No need to manually trigger UI update here anymore
-    // The parent GameEngine's update() method will handle it
-  }
-
-  public async spawnTroopOnServer(
-    type: TroopType,
-    team: 'red' | 'blue',
-    row: number,
-    col: number
-  ): Promise<boolean> {
-    if (!this.gameId) {
-      console.error('No game ID available');
-      return false;
-    }
-
-    // Convert TroopType enum value to the format expected by Python server
-    const troopTypeMap: Record<string, string> = {
-      'giant': 'GIANT',
-      'babyDragon': 'BABY_DRAGON',
-      'miniPekka': 'MINI_PEKKA',
-      'valkyrie': 'VALKYRIE'
-    };
-
-    const serverTroopType = troopTypeMap[type] || type.toUpperCase();
-
-    const requestData = {
-      game_id: this.gameId,
-      troop_type: serverTroopType,
-      position: { row, col },
-      team,
-    };
-
-    console.log('=== SENDING SPAWN REQUEST ===');
-    console.log('Data:', JSON.stringify(requestData, null, 2));
-
-    try {
-      const response = await fetch('/api/game/spawn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to spawn troop - Response:', errorText);
-        try {
-          const error = JSON.parse(errorText);
-          console.error('Error details:', error);
-        } catch {
-          console.error('Could not parse error response');
-        }
-        return false;
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Server will update state, we'll receive it via sync
-        console.log('Troop spawned successfully:', result.message);
-        return true;
-      } else {
-        console.error('Failed to spawn troop:', result.error);
-        return false;
-      }
-    } catch (error) {
-      console.error('Error spawning troop on server:', error);
-      return false;
-    }
-  }
-
-  // Override parent spawnTroop to use server
-  public spawnTroop(type: TroopType, team: 'red' | 'blue', row?: number, col?: number): string {
-    if (this.gameId) {
-      // In server mode, spawn via server
-      const spawnRow = row ?? (team === 'red' ? 10 : 23);
-      const spawnCol = col ?? 8;
-
-      this.spawnTroopOnServer(type, team, spawnRow, spawnCol);
-      return `${type}_${team}_pending`; // Return temporary ID
-    } else {
-      // Fallback to local mode
-      return super.spawnTroop(type, team, row, col);
-    }
-  }
-
-  private handleGameEnd(winner: 'red' | 'blue'): void {
-    this.gameState.isRunning = false;
-
-    if (this.onGameEndCallback) {
-      this.onGameEndCallback(winner);
-    }
-
-    this.cleanup();
-  }
-
-  private cleanup(): void {
-    if (this.syncInterval) {
-      clearInterval(this.syncInterval);
-      this.syncInterval = null;
-    }
-  }
-
-  public stop(): void {
-    this.cleanup();
-    super.stop();
-  }
-
-  public reset(): void {
-    this.cleanup();
-    this.gameId = null;
-    // Nettoyer le localStorage lors du reset
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('clash_royale_game_id');
-    }
-    super.reset();
-  }
-
-  public getGameId(): string | null {
-    return this.gameId;
-  }
-
-  public getTacticalAnalysis(): string {
-    // This would be populated from server state
-    return 'Waiting for server analysis...';
-  }
-
-  public initializeWithGameId(gameId: string) {
-    this.gameId = gameId;
-    // Persister le game_id dans localStorage pour survivre au refresh
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('clash_royale_game_id', gameId);
-    }
-    this.startServerSync();
-    return this.gameId!;
-  }
-
-  // Restaurer le game_id depuis localStorage au démarrage
-  public restoreFromStorage(): string | null {
-    if (typeof window !== 'undefined') {
-      const savedGameId = localStorage.getItem('clash_royale_game_id');
-      if (savedGameId) {
-        this.gameId = savedGameId;
-        this.startServerSync();
-        return savedGameId;
-      }
-    }
-    return null;
-  }
+      {/* Écran de transition */}
+      {showTransition && (
+        <TransitionScreen 
+          onTransitionComplete={() => setShowTransition(false)}
+        />
+      )}
+    </>
+  );
 }
 
-// Export singleton for direct use
-export const serverEngine = new ServerSyncEngine();
 
 # ====== ui/src/game/GameEngine.ts ======
 import { GiantEntity, Giant } from './troops/Giant';
@@ -1152,175 +950,6 @@ export class GameEngine {
 // Instance singleton du moteur de jeu
 export const gameEngine = new GameEngine();
 
-# ====== ui/src/game/useServerGameEngine.ts ======
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
-import { BaseTroop, TroopType } from "./types/Troop";
-import { Tower } from "./types/Tower";
-import { serverEngine } from "./ServerSyncEngine";
-
-export interface GameHookReturn {
-  troops: BaseTroop[];
-  giants: any[];
-  babyDragons: any[];
-  miniPekkas: any[];
-  valkyries: any[];
-  towers: Tower[];
-  gameEnded: boolean;
-  winner: "red" | "blue" | null;
-  spawnTroop: (type: TroopType, team: "red" | "blue", row: number, col: number) => void;
-  spawnGiantAt: (team: "red" | "blue", row: number, col: number) => void;
-  spawnBabyDragon: (team: "red" | "blue", row: number, col: number) => void;
-  spawnMiniPekka: (team: "red" | "blue", row: number, col: number) => void;
-  spawnValkyrie: (team: "red" | "blue", row: number, col: number) => void;
-  gameStats: {
-    totalTroops: number;
-    livingTroops: number;
-    redTroops: number;
-    blueTroops: number;
-    totalGiants: number;
-    livingGiants: number;
-    redGiants: number;
-    blueGiants: number;
-    totalBabyDragons: number;
-    livingBabyDragons: number;
-    redBabyDragons: number;
-    blueBabyDragons: number;
-    totalMiniPekkas: number;
-    livingMiniPekkas: number;
-    redMiniPekkas: number;
-    blueMiniPekkas: number;
-    totalValkyries: number;
-    livingValkyries: number;
-    redValkyries: number;
-    blueValkyries: number;
-    gameTime: number;
-    isRunning: boolean;
-    isPaused: boolean;
-  };
-  startGame: () => void;
-  pauseGame: () => void;
-  resumeGame: () => void;
-  stopGame: () => void;
-  resetGame: () => void;
-  isGameRunning: boolean;
-  isGamePaused: boolean;
-  connectFlaggedCells: (fc: Set<string>) => void;
-}
-
-export const useServerGameEngine = (): GameHookReturn => {
-  const [troops, setTroops] = useState<BaseTroop[]>([]);
-  const [towers, setTowers] = useState<Tower[]>([]);
-  const [gameStats, setGameStats] = useState(serverEngine.getGameStats());
-  const [gameEnded, setGameEnded] = useState(false);
-  const [winner, setWinner] = useState<"red" | "blue" | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    // ✅ Restaurer le game_id depuis localStorage au démarrage
-    const savedGameId = serverEngine.restoreFromStorage();
-    if (savedGameId && mounted) {
-      console.log("🔄 Restored game from storage:", savedGameId);
-      serverEngine.start();
-    }
-
-    // ✅ Brancher les callbacks
-    serverEngine.setOnUpdate((updatedTroops) => {
-      setTroops([...updatedTroops]);
-      setTowers([...serverEngine.getAllTowers()]);
-      setGameStats(serverEngine.getGameStats());
-    });
-
-    serverEngine.setOnGameEnd((w) => {
-      setGameEnded(true);
-      setWinner(w);
-    });
-
-    return () => {
-      mounted = false;
-      serverEngine.stop();
-    };
-  }, []);
-
-  const spawnTroop = useCallback((type: TroopType, team: "red" | "blue", row: number, col: number) => {
-    serverEngine.spawnTroop(type, team, row, col);
-  }, []);
-
-  const spawnGiantAt = useCallback((team: "red" | "blue", row: number, col: number) => {
-    serverEngine.spawnTroop(TroopType.GIANT, team, row, col);
-  }, []);
-
-  const spawnBabyDragon = useCallback((team: "red" | "blue", row: number, col: number) => {
-    serverEngine.spawnTroop(TroopType.BABY_DRAGON, team, row, col);
-  }, []);
-
-  const spawnMiniPekka = useCallback((team: "red" | "blue", row: number, col: number) => {
-    serverEngine.spawnTroop(TroopType.MINI_PEKKA, team, row, col);
-  }, []);
-
-  const spawnValkyrie = useCallback((team: "red" | "blue", row: number, col: number) => {
-    serverEngine.spawnTroop(TroopType.VALKYRIE, team, row, col);
-  }, []);
-
-  const startGame = useCallback(() => {
-    serverEngine.start();
-    setGameStats(serverEngine.getGameStats());
-  }, []);
-
-  const pauseGame = useCallback(() => {
-    serverEngine.pause();
-    setGameStats(serverEngine.getGameStats());
-  }, []);
-
-  const resumeGame = useCallback(() => {
-    serverEngine.resume();
-    setGameStats(serverEngine.getGameStats());
-  }, []);
-
-  const stopGame = useCallback(() => {
-    serverEngine.stop();
-    setGameStats(serverEngine.getGameStats());
-  }, []);
-
-  const resetGame = useCallback(() => {
-    serverEngine.reset();
-    setGameEnded(false);
-    setWinner(null);
-  }, []);
-
-  const connectFlaggedCells = useCallback((fc: Set<string>) => {
-    serverEngine.connectFlaggedCells(fc);
-  }, []);
-
-  return {
-    troops,
-    giants: troops.filter(t => t.type === TroopType.GIANT) as any[],
-    babyDragons: troops.filter(t => t.type === TroopType.BABY_DRAGON) as any[],
-    miniPekkas: troops.filter(t => t.type === TroopType.MINI_PEKKA) as any[],
-    valkyries: troops.filter(t => t.type === TroopType.VALKYRIE) as any[],
-    towers,
-    gameEnded,
-    winner,
-    spawnTroop,
-    spawnGiantAt,
-    spawnBabyDragon,
-    spawnMiniPekka,
-    spawnValkyrie,
-    gameStats,
-    startGame,
-    pauseGame,
-    resumeGame,
-    stopGame,
-    resetGame,
-    isGameRunning: gameStats.isRunning,
-    isGamePaused: gameStats.isPaused,
-    connectFlaggedCells,
-  };
-};
-
-
 # ====== ui/src/game/useGameEngine.ts ======
 import { useState, useEffect, useCallback } from 'react';
 import { gameEngine } from './GameEngine';
@@ -1539,454 +1168,175 @@ export const useGameEngine = (towers?: Tower[], flaggedCells?: Set<string>): Gam
 };
 
 
-# ====== ui/src/app/page.tsx ======
-"use client";
+# ====== ui/src/lib/gameStore.ts ======
+// src/lib/gameStore.ts
+import { v4 as uuidv4 } from "uuid";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import TransitionScreen from "@/components/TransitionScreen";
+export type TroopType = "GIANT" | "BABY_DRAGON" | "MINI_PEKKA" | "VALKYRIE";
+export type Team = "red" | "blue";
 
-export default function Home() {
-  const [showTransition, setShowTransition] = useState(false);
-  const router = useRouter();
-
-  const handleCombatClick = () => {
-    const id = window.prompt("Entre un Game ID (copie/colle depuis ton terminal) :");
-    if (!id || !id.trim()) return; // pas d'ID => on reste au menu
-    router.push(`/arena?game_id=${encodeURIComponent(id.trim())}`);
-  };
-
-  return (
-    <>
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-        {/* Fond flou */}
-        <img
-          src="/images/backgrounds/goal.png"
-          alt="Goal Background Blurred"
-          className="absolute inset-0 w-full h-full object-cover blur-sm"
-        />
-        
-        {/* Container avec ratio 9/16 */}
-        <div className="relative w-[56.25vh] h-screen max-w-full max-h-screen z-10">
-          <img
-            src="/images/backgrounds/goal.png"
-            alt="Goal Background"
-            className="w-full h-full object-cover"
-          />
-          
-          {/* Bouton jouer stylisé */}
-          <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center">
-            <Button 
-              onClick={handleCombatClick}
-              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-10 px-7 rounded-2xl text-2xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
-            >
-              Combat
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Écran de transition */}
-      {showTransition && (
-        <TransitionScreen 
-          onTransitionComplete={() => setShowTransition(false)}
-        />
-      )}
-    </>
-  );
+export interface Troop {
+  id: string;
+  type: TroopType;
+  team: Team;
+  position: { row: number; col: number };
+  health: number;
+  max_health: number;
+  spawned_at: string;
 }
 
-
-# ====== ui/src/app/arena/page.tsx ======
-"use client";
-
-import { Button } from "@/components/ui/button";
-import React, { useState } from "react";
-import TowerHealthBar from "@/components/TowerHealthBar";
-import ClashTimer from "@/components/ClashTimer";
-import GameEndScreen from "@/components/GameEndScreen";
-import { TroopType, TROOP_CONFIGS } from "@/game/types/Troop";
-import { useServerGameEngine } from "@/game/useServerGameEngine";
-import { serverEngine } from "@/game/ServerSyncEngine";
-import { useSearchParams, useRouter } from "next/navigation";
-
-export default function Arena() {
-  const showGrid = false;
-  const numRows = 34;
-  const numCols = 18;
-
-  const [currentTeam, setCurrentTeam] = useState<'red' | 'blue'>('red');
-  const [draggedCard, setDraggedCard] = useState<{troopType: TroopType, team: 'red' | 'blue'} | null>(null);
-  const router = useRouter();
-  const params = useSearchParams();
-  const gid = params.get("game_id");
-
-  const isArenaVisible = true;
-
-  // Tour visuals (pour flags + sprites)
-  const TOWER = React.useMemo(() => ({
-    KING_RED: {
-      id: 'king_red', name: 'King Red', image: '/images/towers/king_red.png',
-      row: 2, col: 8, size: 6.5, offsetX: 1.4, offsetY: -2.8, team: 'red', type: 'king',
-      flagged_cells: [[1,7],[1,8],[1,9],[1,10],[2,10],[2,9],[2,8],[2,7],[3,7],[3,8],[3,9],[3,10],[4,10],[4,9],[4,8],[4,7]],
-      active: true,
-    },
-    PRINCESS_RED_1: {
-      id: 'princess_red', name: 'Princess Red', image: '/images/towers/princess_red.png',
-      row: 6, col: 3, size: 4, offsetX: -0.7, offsetY: -3.3, team: 'red', type: 'princess',
-      flagged_cells: [[5,2],[5,3],[5,4],[6,4],[7,4],[7,3],[7,2],[6,2],[6,3]], active: true,
-    },
-    PRINCESS_RED_2: {
-      id: 'princess_red_2', name: 'Princess Red', image: '/images/towers/princess_red.png',
-      row: 6, col: 14, size: 4, offsetX: 0, offsetY: -3.3, team: 'red', type: 'princess',
-      flagged_cells: [[5,13],[5,14],[5,15],[6,15],[6,14],[6,13],[7,13],[7,14],[7,15]], active: true,
-    },
-    PRINCESS_BLUE_1: {
-      id: 'princess_blue', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
-      row: 27, col: 3, size: 7.4, offsetX: -0.4, offsetY: -2, team: 'blue', type: 'princess',
-      flagged_cells: [[26,2],[26,3],[26,4],[27,4],[27,3],[27,2],[28,2],[28,3],[28,4]], active: true,
-    },
-    PRINCESS_BLUE_2: {
-      id: 'princess_blue_2', name: 'Princess Blue', image: '/images/towers/princess_blue.png',
-      row: 27, col: 14, size: 7.4, offsetX: 0, offsetY: -2, team: 'blue', type: 'princess',
-      flagged_cells: [[26,13],[26,14],[26,15],[27,15],[27,14],[27,13],[28,13],[28,14],[28,15]], active: true,
-    },
-    KING_BLUE: {
-      id: 'king_blue', name: 'King Blue', image: '/images/towers/king_blue.png',
-      row: 30, col: 8, size: 6.5, offsetX: 1, offsetY: -2, team: 'blue', type: 'king',
-      flagged_cells: [[29,7],[30,7],[31,7],[32,7],[32,8],[31,8],[30,8],[29,8],[29,9],[29,10],[30,10],[30,9],[31,9],[31,10],[32,10],[32,9]],
-      active: true,
-    }
-  }), []);
-
-  const {
-    troops,
-    towers: gameEngineTowers,
-    spawnTroop,
-    startGame,
-    pauseGame,
-    resumeGame,
-    stopGame,
-    resetGame,
-    isGameRunning,
-    isGamePaused,
-    gameEnded,
-    winner,
-    connectFlaggedCells,
-  } = useServerGameEngine();
-
-  // flagged cells basées sur les tours visibles
-  const getActiveTowersFlaggedCells = React.useCallback(() => {
-    const flaggedCells = new Set<string>();
-    Object.values(TOWER).forEach(tower => {
-      const engineTower = gameEngineTowers.find(t => t.id === tower.id);
-      const alive = !engineTower || engineTower.isAlive;
-      if (tower.active && tower.flagged_cells && alive) {
-        tower.flagged_cells.forEach(([r, c]) => flaggedCells.add(`${r}-${c}`));
-      }
-    });
-    return flaggedCells;
-  }, [gameEngineTowers, TOWER]);
-
-  const flaggedCells = React.useMemo(() => getActiveTowersFlaggedCells(), [getActiveTowersFlaggedCells]);
-
-  React.useEffect(() => {
-    if (flaggedCells) connectFlaggedCells(flaggedCells);
-  }, [flaggedCells, connectFlaggedCells]);
-
-  // Si pas d'ID -> retour au menu
-  React.useEffect(() => {
-    if (!gid) router.replace("/");
-  }, [gid, router]);
-
-  // Si on a un ID -> on rejoint la game et on démarre le moteur
-  React.useEffect(() => {
-    if (!gid) return;
-    try {
-      console.log("🎮 Joining existing game:", gid);
-      serverEngine.stop();
-      serverEngine.reset();
-      serverEngine.initializeWithGameId(gid);
-      serverEngine.start();
-      console.log("✅ Joined game:", gid);
-    } catch (e) {
-      console.error("❌ Failed to join game:", e);
-      // Nettoyer le localStorage en cas d'erreur
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('clash_royale_game_id');
-      }
-      router.replace("/");
-    }
-  }, [gid, router]);
-
-  if (!gid) return null; // évite de rendre l'arène le temps de la redirection
-
-  const handleCardDragStart = (troopType: TroopType) => setDraggedCard({ troopType, team: currentTeam });
-  const handleCardDragEnd = () => setDraggedCard(null);
-  const handleCellDrop = (row: number, col: number, e: React.DragEvent) => {
-    e.preventDefault();
-    if (draggedCard && isGameRunning) {
-      spawnTroop(draggedCard.troopType, draggedCard.team, row, col);
-      setDraggedCard(null);
-    }
-  };
-  const handleCellDragOver = (e: React.DragEvent) => e.preventDefault();
-  const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
-
-  const getTroopGifPath = (troop: any) => {
-    const config = TROOP_CONFIGS[troop.type as TroopType];
-    if (!config) return null;
-    if (troop.isInCombat) {
-      const targetIsAbove = troop.targetPosition.row < troop.position.row;
-      const gifType = targetIsAbove ? 'player' : 'opponent';
-      return `${config.gifPaths.fight[gifType as 'player' | 'opponent']}?v=${troop.isInCombat}`;
-    } else {
-      const isMovingDown = troop.targetPosition.row > troop.position.row;
-      const isMovingUp = troop.targetPosition.row < troop.position.row;
-      let gifType: 'player' | 'opponent';
-      if (isMovingDown) gifType = 'opponent';
-      else if (isMovingUp) gifType = 'player';
-      else gifType = troop.team === 'red' ? 'player' : 'opponent';
-      return `${config.gifPaths.walk[gifType]}?v=${troop.isInCombat}`;
-    }
-  };
-
-  const handleRestart = () => {
-    resetGame();
-    setTimeout(() => startGame(), 100);
-  };
-
-  return (
-    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
-      <img src="/images/backgrounds/arena_in_game.png" alt="Goal Background Blurred" className="absolute inset-0 w-full h-full object-cover blur-sm" />
-
-      {gameEnded && winner && <GameEndScreen winner={winner} onRestart={handleRestart} />}
-
-      <div className="relative w-[56.25vh] mb-10 h-screen max-w-full max-h-screen z-10">
-        <img src="/images/backgrounds/arena_in_game.png" alt="Arena In Game" className="w-full h-full object-cover" />
-
-        <div className="absolute inset-0 pl-[10%] pr-[9.8%] pt-[27.8%] pb-[34.2%]">
-          <div className={`w-full h-full grid gap-0`} style={{ gridTemplateColumns: `repeat(${numCols}, 1fr)`, gridTemplateRows: `repeat(${numRows}, 1fr)` }}>
-            {Array.from({ length: numRows * numCols }, (_, index) => {
-              const row = Math.floor(index / numCols);
-              const col = index % numCols;
-              const isEven = (row + col) % 2 === 0;
-              const towerPosition = Object.values(TOWER).find(pos => row === pos.row && col === pos.col);
-              const shouldShowTower = !!towerPosition;
-              const tower = towerPosition || null;
-
-              return (
-                <div
-                  key={index}
-                  className={`w-full h-full transition-all duration-200 relative ${!showGrid ? 'bg-transparent' : 'bg-black/20'}
-                    ${
-                      draggedCard 
-                        ? `cursor-crosshair ${draggedCard.team === 'red' ? 'hover:bg-red-400/50 hover:ring-2 ring-red-400' : 'hover:bg-blue-400/50 hover:ring-2 ring-blue-400'}`
-                        : 'cursor-default'
-                    } ${
-                      isEven ? 'bg-white/10 hover:bg-white/20 hover:ring-2 ring-yellow-400 ring-opacity-50'
-                             : 'bg-black/20 hover:bg-black/30 hover:ring-2 ring-yellow-400 ring-opacity-50'
-                    }`}
-                  onDrop={(e) => handleCellDrop(row, col, e)}
-                  onDragOver={handleCellDragOver}
-                >
-                  {shouldShowTower && (() => {
-                    const engineTower = gameEngineTowers.find(t => t.id === tower!.id);
-                    const dead = engineTower && !engineTower.isAlive;
-                    if (dead) return null;
-
-                    return (
-                      <>
-                        <img
-                          src={tower!.image}
-                          alt={tower!.name}
-                          className="absolute inset-0 w-full h-full z-10 pointer-events-none object-contain"
-                          style={{ transform: `scale(${tower!.size}) translate(${tower!.offsetX}px, ${tower!.offsetY}px)` }}
-                        />
-                        <div
-                          className="absolute z-20 pointer-events-none"
-                          style={{
-                            left: `${(tower as any).offsetX - 16}px`,
-                            top: `${
-                              (tower as any).type === 'king'
-                                ? ((tower as any).team === 'blue' ? 20 : -60)
-                                : ((tower as any).team === 'blue' ? (tower as any).offsetY : (tower as any).offsetY - 40)
-                            }px`,
-                          }}
-                        >
-                          {(() => {
-                            const t = engineTower;
-                            const currentHealth = t?.health || ((tower as any).type === 'king' ? 4825 : 3052);
-                            const maxHealth = t?.maxHealth || ((tower as any).type === 'king' ? 4825 : 3052);
-                            return <TowerHealthBar currentHealth={currentHealth} maxHealth={maxHealth} team={(tower as any).team} />;
-                          })()}
-                        </div>
-                      </>
-                    );
-                  })()}
-
-                  {troops
-                    .filter(troop => Math.floor(troop.position.row) === row && Math.floor(troop.position.col) === col)
-                    .map(troop => {
-                      const gifPath = getTroopGifPath(troop);
-                      const config = TROOP_CONFIGS[troop.type as TroopType];
-                      if (!gifPath || !config) return null;
-                      return (
-                        <div
-                          key={troop.id}
-                          className="absolute z-20 w-full h-full flex items-center justify-center pointer-events-none"
-                          style={{ transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)` }}
-                        >
-                          <img
-                            key={`${troop.id}-${troop.isInCombat ? 'combat' : 'walk'}`}
-                            src={gifPath}
-                            alt={`${troop.type} ${troop.team}`}
-                            className="w-12 h-12 object-contain"
-                            style={{
-                              transform: `scale(${typeof config.scale === 'object' ? (troop.isInCombat ? config.scale.fight : config.scale.walk) : config.scale})`,
-                            }}
-                          />
-                          <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
-                            <div
-                              className={`h-full rounded transition-all duration-200 ${troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
-                              style={{ width: `${(troop.health / troop.maxHealth) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="absolute top-4 right-4 z-10">
-          <ClashTimer />
-        </div>
-
-        {/* Barre de cartes */}
-        <div className="fixed bottom-0 left-0 right-0 z-10">
-          <div className="flex justify-center items-end pb-4">
-            <div className="relative w-[80%] max-w-md">
-              <img src="/images/cards/more/card_box.png" alt="Card Box" className="w-full h-44 object-fill rounded-t-lg" />
-              <div className="absolute inset-0 grid grid-cols-4 gap-1.5 pl-[4.5%] pr-[4%] pb-[5.5%] items-stretch">
-                {/* Baby Dragon */}
-                <div
-                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-yellow-400 hover:ring-opacity-80'
-                  }`}
-                  draggable={isGameRunning}
-                  onDragStart={() => handleCardDragStart(TroopType.BABY_DRAGON)}
-                  onDragEnd={handleCardDragEnd}
-                >
-                  <img src="/images/cards/more/BabyDragonCard.png" alt={`${currentTeam} Baby Dragon`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
-                </div>
-
-                {/* Mini PEKKA */}
-                <div
-                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-400 hover:ring-opacity-80'
-                  }`}
-                  draggable={isGameRunning}
-                  onDragStart={() => handleCardDragStart(TroopType.MINI_PEKKA)}
-                  onDragEnd={handleCardDragEnd}
-                >
-                  <img src="/images/cards/more/MiniPEKKACard.png" alt={`${currentTeam} Mini PEKKA`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
-                </div>
-
-                {/* Giant */}
-                <div
-                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-orange-400 hover:ring-opacity-80'
-                  }`}
-                  draggable={isGameRunning}
-                  onDragStart={() => handleCardDragStart(TroopType.GIANT)}
-                  onDragEnd={handleCardDragEnd}
-                >
-                  <img src="/images/cards/more/GiantCard.png" alt={`${currentTeam} Giant`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
-                </div>
-
-                {/* Valkyrie */}
-                <div
-                  className={`w-full h-full transition-all duration-200 hover:scale-105 hover:z-10 relative rounded ${
-                    !isGameRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-red-400 hover:ring-opacity-80'
-                  }`}
-                  draggable={isGameRunning}
-                  onDragStart={() => handleCardDragStart(TroopType.VALKYRIE)}
-                  onDragEnd={handleCardDragEnd}
-                >
-                  <img src="/images/cards/more/ValkyrieCard.png" alt={`${currentTeam} Valkyrie`} className="w-full h-full object-contain drop-shadow-lg pointer-events-none" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Contrôles */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
-        <Button
-          variant="secondary"
-          className={`font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20 ${
-            currentTeam === 'red' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
-          }`}
-          onClick={switchTeam}
-        >
-          Team: {currentTeam === 'red' ? 'Red' : 'Blue'}
-        </Button>
-
-        <div className="space-x-2">
-          {!isGameRunning ? (
-            <Button
-              variant="secondary"
-              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-              onClick={startGame}
-            >
-              Start Game
-            </Button>
-          ) : (
-            <>
-              {isGamePaused ? (
-                <Button
-                  variant="secondary"
-                  className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                  onClick={resumeGame}
-                >
-                  Resume
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                  onClick={pauseGame}
-                >
-                  Pause
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-lg border-2 border-white/20"
-                onClick={stopGame}
-              >
-                Stop
-              </Button>
-            </>
-          )}
-        </div>
-
-        {isGameRunning && (
-          <div className="text-center">
-            <div className="bg-black/50 rounded-lg p-3 border border-white/20">
-              <p className="text-white text-sm font-medium">
-                Drag cards from the bottom to spawn {currentTeam} troops
-              </p>
-              <p className="text-gray-300 text-xs mt-1">Switch team with the button above</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+export interface Tower {
+  id: string;
+  team: Team;
+  type: "king" | "princess";
+  health: number;
+  max_health: number;
+  position: { row: number; col: number };
 }
+
+export interface GameState {
+  game_id: string;
+  troops: Troop[];
+  towers: Record<string, Tower>;
+  elixir: { red: number; blue: number };
+  max_elixir: number;
+  elixir_rate: number;
+  available_cards: TroopType[];
+  game_time: number;
+  start_time: string;
+  is_game_over: boolean;
+  winner: string | null;
+  tactical_analysis: string;
+}
+
+const games = new Map<string, GameState>();
+
+// === HELPERS ===
+function defaultTowers(): Record<string, Tower> {
+  return {
+    king_red: {
+      id: "king_red",
+      team: "red",
+      type: "king",
+      health: 100,
+      max_health: 100,
+      position: { row: 2, col: 8 },
+    },
+    princess_red_left: {
+      id: "princess_red_left",
+      team: "red",
+      type: "princess",
+      health: 100,
+      max_health: 100,
+      position: { row: 6, col: 3 },
+    },
+    princess_red_right: {
+      id: "princess_red_right",
+      team: "red",
+      type: "princess",
+      health: 100,
+      max_health: 100,
+      position: { row: 6, col: 14 },
+    },
+    king_blue: {
+      id: "king_blue",
+      team: "blue",
+      type: "king",
+      health: 100,
+      max_health: 100,
+      position: { row: 31, col: 8 },
+    },
+    princess_blue_left: {
+      id: "princess_blue_left",
+      team: "blue",
+      type: "princess",
+      health: 100,
+      max_health: 100,
+      position: { row: 27, col: 3 },
+    },
+    princess_blue_right: {
+      id: "princess_blue_right",
+      team: "blue",
+      type: "princess",
+      health: 100,
+      max_health: 100,
+      position: { row: 27, col: 14 },
+    },
+  };
+}
+
+export function createGame(): GameState {
+  const id = uuidv4();
+  const state: GameState = {
+    game_id: id,
+    troops: [],
+    towers: defaultTowers(),
+    elixir: { red: 5, blue: 5 },
+    max_elixir: 10,
+    elixir_rate: 1,
+    available_cards: ["GIANT", "BABY_DRAGON", "MINI_PEKKA", "VALKYRIE"],
+    game_time: 0,
+    start_time: new Date().toISOString(),
+    is_game_over: false,
+    winner: null,
+    tactical_analysis: "Equal troop count on battlefield. Early game: Focus on elixir trades and chip damage",
+  };
+  games.set(id, state);
+  return state;
+}
+
+export function getGame(id: string): GameState | null {
+  return games.get(id) || null;
+}
+
+export function spawnTroop(
+  id: string,
+  troop_type: TroopType,
+  team: Team,
+  position: { row: number; col: number }
+): GameState | null {
+  const game = games.get(id);
+  if (!game) return null;
+
+  const costs: Record<TroopType, number> = {
+    GIANT: 5,
+    BABY_DRAGON: 4,
+    MINI_PEKKA: 3,
+    VALKYRIE: 4,
+  };
+
+  if (game.elixir[team] < costs[troop_type]) return game;
+
+  const troop: Troop = {
+    id: `${troop_type}_${team}_${game.troops.length}_${Math.random().toString(16).slice(2, 8)}`,
+    type: troop_type,
+    team,
+    position,
+    health: 100,
+    max_health: 100,
+    spawned_at: new Date().toISOString(),
+  };
+
+  game.troops.push(troop);
+  game.elixir[team] -= costs[troop_type];
+  games.set(id, game);
+  return game;
+}
+
+// Mettre à jour le temps de jeu
+export function updateGameTime(id: string): GameState | null {
+  const game = games.get(id);
+  if (!game) return null;
+
+  const now = new Date();
+  const startTime = new Date(game.start_time);
+  game.game_time = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+  
+  // Régénérer l'elixir
+  game.elixir.red = Math.min(game.max_elixir, game.elixir.red + game.elixir_rate * 0.1);
+  game.elixir.blue = Math.min(game.max_elixir, game.elixir.blue + game.elixir_rate * 0.1);
+  
+  games.set(id, game);
+  return game;
+}
+

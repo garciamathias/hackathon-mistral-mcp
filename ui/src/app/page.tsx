@@ -9,10 +9,14 @@ export default function Home() {
   const [showTransition, setShowTransition] = useState(false);
   const router = useRouter();
 
-  const handleCombatClick = () => {
-    const id = window.prompt("Entre un Game ID (copie/colle depuis ton terminal) :");
-    if (!id || !id.trim()) return; // pas d'ID => on reste au menu
-    router.push(`/arena?game_id=${encodeURIComponent(id.trim())}`);
+  const handleCombatClick = async () => {
+    try {
+      const res = await fetch("/api/game/init", { method: "POST" });
+      const { game_id } = await res.json();
+      router.push(`/arena?game_id=${game_id}`);
+    } catch (error) {
+      console.error("Failed to create game:", error);
+    }
   };
 
   return (

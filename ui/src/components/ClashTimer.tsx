@@ -1,20 +1,29 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { serverEngine } from "@/game/ServerSyncEngine";
+import { useSearchParams } from "next/navigation";
 
 export default function ClashTimer() {
   const [timeLeft, setTimeLeft] = useState(180); // 3:00 in seconds
+  const params = useSearchParams();
+  const gameId = params.get("game_id");
 
   useEffect(() => {
+    if (!gameId) return;
+
     // Utiliser le temps du serveur au lieu d'un timer local
-    const updateTimer = () => {
-      const gameStats = serverEngine.getGameStats();
-      const serverTime = gameStats.gameTime || 0;
-      
-      // Calculer le temps restant (180 secondes - temps écoulé)
-      const remainingTime = Math.round(Math.max(0, 180 - serverTime));
-      setTimeLeft(remainingTime);
+    const updateTimer = async () => {
+      try {
+        const res = await fetch(`/api/game/${gameId}/state`);
+        const gameState = await res.json();
+        const serverTime = gameState.game_time || 0;
+        
+        // Calculer le temps restant (180 secondes - temps écoulé)
+        const remainingTime = Math.round(Math.max(0, 180 - serverTime));
+        setTimeLeft(remainingTime);
+      } catch (error) {
+        console.error("Failed to fetch game state for timer:", error);
+      }
     };
 
     // Mettre à jour immédiatement
@@ -24,7 +33,7 @@ export default function ClashTimer() {
     const interval = setInterval(updateTimer, 100);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [gameId]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

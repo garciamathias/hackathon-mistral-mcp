@@ -31,22 +31,15 @@ def concat_files_to_txt(file_list, output_path="code_to_send.txt"):
 if __name__ == "__main__":
     # Exemple d'utilisation : à adapter selon vos besoins
     files = [
+        "ui/src/app/api/game/[id]/state/route.ts",
         "ui/src/app/api/game/init/route.ts",
         "ui/src/app/api/game/spawn/route.ts",
-        "ui/src/app/api/game/state/route.ts",
-        "ui/src/app/api/game/sync/route.ts",
         "ui/src/app/api/mcp/[transport]/route.ts",
-        "ui/src/game/ServerSyncEngine.ts",
-        "ui/src/game/GameEngine.ts",
-        "ui/src/game/useServerGameEngine.ts",
-        "ui/src/game/useGameEngine.ts",
+        "ui/src/app/arena/page.tsx", 
         "ui/src/app/page.tsx",
-        "ui/src/app/arena/page.tsx",
-    ]
-
-    mcp_files = [
-        "mcp-server/server.py",
+        "ui/src/game/GameEngine.ts", 
+        "ui/src/game/useGameEngine.ts", 
+        "ui/src/lib/gameStore.ts"
     ]
 
     concat_files_to_txt(files, "code_to_send.txt")
-    concat_files_to_txt(mcp_files, "code_to_send_mcp.txt")
