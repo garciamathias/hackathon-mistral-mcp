@@ -332,35 +332,57 @@ export class GameEngine {
               }
             }
 
-            // Target and move to nearest enemy tower
+            // Target and move to nearest enemy (tower or troop based on focusOnBuildings)
             if (troopData.state === TroopState.TARGETING_TOWER || troopData.state === TroopState.ATTACKING_TOWER) {
-              // Find closest enemy tower
-              const enemyTowers = towers.filter(t => t.team !== troopData.team && t.isAlive);
-              if (enemyTowers.length === 0) {
-                troopData.state = TroopState.DEAD;
-                troopData.isAlive = false;
-                return;
-              }
+              let closestTarget: any = null;
+              let closestDist = Infinity;
+              let targetType: 'tower' | 'troop' = 'tower';
 
-              let closestTower = enemyTowers[0];
-              let closestDist = Math.sqrt(
-                Math.pow(closestTower.position.row - troopData.position.row, 2) +
-                Math.pow(closestTower.position.col - troopData.position.col, 2)
-              );
-
-              for (const tower of enemyTowers) {
-                const dist = Math.sqrt(
-                  Math.pow(tower.position.row - troopData.position.row, 2) +
-                  Math.pow(tower.position.col - troopData.position.col, 2)
-                );
-                if (dist < closestDist) {
-                  closestDist = dist;
-                  closestTower = tower;
+              // Check if troop focuses only on buildings
+              if (troopData.focusOnBuildings) {
+                // Giant - only targets towers
+                const enemyTowers = towers.filter(t => t.team !== troopData.team && t.isAlive);
+                if (enemyTowers.length === 0) {
+                  troopData.state = TroopState.DEAD;
+                  troopData.isAlive = false;
+                  return;
                 }
+
+                closestTarget = enemyTowers[0];
+                closestDist = Math.sqrt(
+                  Math.pow(closestTarget.position.row - troopData.position.row, 2) +
+                  Math.pow(closestTarget.position.col - troopData.position.col, 2)
+                );
+
+                for (const tower of enemyTowers) {
+                  const dist = Math.sqrt(
+                    Math.pow(tower.position.row - troopData.position.row, 2) +
+                    Math.pow(tower.position.col - troopData.position.col, 2)
+                  );
+                  if (dist < closestDist) {
+                    closestDist = dist;
+                    closestTarget = tower;
+                  }
+                }
+                targetType = 'tower';
+              } else {
+                // Baby Dragon, Mini P.E.K.K.A, Valkyrie - target nearest enemy (troop or tower)
+                const result = gameEngine.findClosestEnemy(troopData);
+                if (!result) {
+                  troopData.state = TroopState.DEAD;
+                  troopData.isAlive = false;
+                  return;
+                }
+                closestTarget = result.target;
+                closestDist = result.distance;
+                targetType = result.target.type === 'tower' ? 'tower' : 'troop';
               }
 
-              troopData.towerTarget = closestTower.id;
-              troopData.targetPosition = closestTower.position;
+              // Update target position
+              troopData.targetPosition = closestTarget.position;
+              if (targetType === 'tower') {
+                troopData.towerTarget = closestTarget.id;
+              }
 
               // Check if in attack range
               const attackRange = config.range || 1.2;
@@ -372,22 +394,29 @@ export class GameEngine {
                 const now = Date.now() / 1000; // Convert to seconds
                 const attackCooldown = 1 / troopData.attackSpeed; // Time between attacks in seconds
                 if (troopData.lastAttackTime === 0 || now - troopData.lastAttackTime >= attackCooldown) {
-                  // Deal damage to tower
-                  const towerEntity = gameEngine.towers.get(closestTower.id);
-                  if (towerEntity) {
-                    towerEntity.takeDamage(troopData.attackDamage);
-                    troopData.lastAttackTime = now; // Store in seconds
-                    console.log(`Troop ${troopData.id} attacks tower ${closestTower.id} for ${troopData.attackDamage} damage`);
+                  // Deal damage based on target type
+                  if (targetType === 'tower') {
+                    const towerEntity = gameEngine.towers.get(closestTarget.id);
+                    if (towerEntity) {
+                      towerEntity.takeDamage(troopData.attackDamage);
+                      troopData.lastAttackTime = now;
+                      console.log(`Troop ${troopData.id} attacks tower ${closestTarget.id} for ${troopData.attackDamage} damage`);
+                    }
+                  } else {
+                    // Attack enemy troop
+                    gameEngine.dealDamageToTroop(closestTarget.id, troopData.attackDamage);
+                    troopData.lastAttackTime = now;
+                    console.log(`Troop ${troopData.id} attacks troop ${closestTarget.id} for ${troopData.attackDamage} damage`);
                   }
                 }
               } else {
-                // Move towards tower
+                // Move towards target
                 troopData.state = TroopState.TARGETING_TOWER;
                 troopData.isInCombat = false;
 
                 const moveDistance = troopData.speed * deltaTime;
-                const dx = closestTower.position.col - troopData.position.col;
-                const dy = closestTower.position.row - troopData.position.row;
+                const dx = closestTarget.position.col - troopData.position.col;
+                const dy = closestTarget.position.row - troopData.position.row;
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
                 if (dist > 0) {
