@@ -1,0 +1,1499 @@
+
+# ====== ui/src/app/api/game/init/route.ts ======
+import { NextResponse } from 'next/server';
+
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+
+export async function POST() {
+  try {
+    const response = await fetch(`${MCP_SERVER_URL}/api/game/init`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`MCP server responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error initializing game:', error);
+    return NextResponse.json(
+      { error: 'Failed to initialize game' },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/game/spawn/route.ts ======
+import { NextRequest, NextResponse } from 'next/server';
+
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    // Log what we're sending to the Python server
+    console.log('=== SPAWN REQUEST TO PYTHON SERVER ===');
+    console.log('URL:', `${MCP_SERVER_URL}/api/game/spawn`);
+    console.log('Body:', JSON.stringify(body, null, 2));
+
+    const response = await fetch(`${MCP_SERVER_URL}/api/game/spawn`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await response.text();
+    console.log('Python server response status:', response.status);
+    console.log('Python server response:', responseText);
+
+    // Try to parse as JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse response as JSON:', responseText);
+      return NextResponse.json(
+        { error: 'Invalid response from server', details: responseText },
+        { status: 500 }
+      );
+    }
+
+    if (!response.ok) {
+      console.error('Python server returned error:', data);
+      // Return the actual error from Python server
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    console.log('Spawn successful:', data);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error in spawn route:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to spawn troop',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/game/state/route.ts ======
+import { NextRequest, NextResponse } from 'next/server';
+
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const gameId = searchParams.get('game_id');
+
+  if (!gameId) {
+    return NextResponse.json(
+      { error: 'game_id is required' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const response = await fetch(`${MCP_SERVER_URL}/api/game/${gameId}/state`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`MCP server responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error getting game state:', error);
+    return NextResponse.json(
+      { error: 'Failed to get game state' },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/game/sync/route.ts ======
+import { NextRequest, NextResponse } from 'next/server';
+
+const MCP_SERVER_URL = process.env.MCP_SERVER_URL || 'http://localhost:8000';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    console.log('=== SYNC REQUEST TO PYTHON SERVER ===');
+    console.log('Game ID:', body.game_id);
+    console.log('Troops count:', body.troops?.length || 0);
+    console.log('Game over:', body.is_game_over);
+
+    // Send state to Python server and get AI actions
+    const response = await fetch(`${MCP_SERVER_URL}/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        game_id: body.game_id,
+        troops: body.troops || [],
+        towers: body.towers || {},
+        is_game_over: body.is_game_over || false,
+        winner: body.winner || null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Python server error:', errorText);
+      return NextResponse.json(
+        { error: 'Failed to sync with Python server' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+
+    console.log('=== SYNC RESPONSE FROM PYTHON SERVER ===');
+    console.log('AI actions:', data.ai_actions?.length || 0);
+    console.log('Tactical analysis:', data.tactical_analysis);
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error in /api/game/sync:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+# ====== ui/src/app/api/mcp/[transport]/route.ts ======
+import { NextRequest, NextResponse } from "next/server";
+import { gameEngine } from "@/game/GameEngine";
+import { TroopType } from "@/game/types/Troop";
+
+// Interface pour les outils MCP
+interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties: Record<string, any>;
+    required: string[];
+  };
+}
+
+// Définition des outils disponibles
+const tools: MCPTool[] = [
+  {
+    name: "start_game",
+    description: "Démarre une nouvelle partie de Clash Royale",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "deploy_troop",
+    description: "Déploie une troupe sur le terrain de bataille",
+    inputSchema: {
+      type: "object",
+      properties: {
+        troopType: {
+          type: "string",
+          enum: ["giant", "babyDragon", "miniPekka", "valkyrie"],
+          description: "Type de troupe à déployer"
+        },
+        row: {
+          type: "number",
+          description: "Position ligne (0-31)"
+        },
+        col: {
+          type: "number",
+          description: "Position colonne (0-17)"
+        },
+        team: {
+          type: "string",
+          enum: ["red", "blue"],
+          description: "Équipe (rouge ou bleue)"
+        }
+      },
+      required: ["troopType", "row", "col", "team"]
+    }
+  },
+  {
+    name: "get_game_state",
+    description: "Récupère l'état actuel du jeu (troupes, tours, statistiques)",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: []
+    }
+  },
+  {
+    name: "analyze_strategy",
+    description: "Analyse une stratégie Clash Royale",
+    inputSchema: {
+      type: "object",
+      properties: {
+        situation: {
+          type: "string",
+          description: "Description de la situation de jeu"
+        }
+      },
+      required: ["situation"]
+    }
+  }
+];
+
+// Fonction pour exécuter un outil
+async function executeTool(name: string, args: any) {
+  switch (name) {
+    case "start_game":
+      try {
+        gameEngine.start();
+        const stats = gameEngine.getGameStats();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: "Game started",
+              gameStats: stats
+            }, null, 2)
+          }]
+        };
+      } catch (error) {
+        throw new Error(`Failed to start game: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+    case "deploy_troop":
+      const { troopType, row, col, team } = args;
+      
+      // Validation complète des arguments
+      const validTroopTypes = ["giant", "babyDragon", "miniPekka", "valkyrie"];
+      const validTeams = ["red", "blue"];
+      
+      if (!troopType || !validTroopTypes.includes(troopType)) {
+        throw new Error(`Invalid troopType. Must be one of: ${validTroopTypes.join(", ")}`);
+      }
+      
+      if (typeof row !== 'number' || row < 0 || row > 31) {
+        throw new Error("Invalid row. Must be a number between 0 and 31");
+      }
+      
+      if (typeof col !== 'number' || col < 0 || col > 17) {
+        throw new Error("Invalid col. Must be a number between 0 and 17");
+      }
+      
+      if (!team || !validTeams.includes(team)) {
+        throw new Error(`Invalid team. Must be one of: ${validTeams.join(", ")}`);
+      }
+      
+      try {
+        gameEngine.spawnTroop(troopType as TroopType, team as 'red' | 'blue', row, col);
+        const troops = gameEngine.getAllTroops();
+        const lastTroop = troops[troops.length - 1];
+        
+        if (!lastTroop) {
+          throw new Error("Failed to spawn troop");
+        }
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: "Troop deployed",
+              troop: {
+                id: lastTroop.id,
+                type: lastTroop.type,
+                team: lastTroop.team,
+                position: { row: lastTroop.row, col: lastTroop.col },
+                health: lastTroop.health
+              }
+            }, null, 2)
+          }]
+        };
+      } catch (error) {
+        throw new Error(`Failed to deploy troop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+    case "get_game_state":
+      try {
+        const allTroops = gameEngine.getAllTroops();
+        const allTowers = gameEngine.getAllTowers();
+        const gameStats = gameEngine.getGameStats();
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              troops: allTroops,
+              towers: allTowers,
+              gameStats: gameStats
+            }, null, 2)
+          }]
+        };
+      } catch (error) {
+        throw new Error(`Failed to get game state: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+    case "analyze_strategy":
+      const { situation } = args;
+      if (!situation || typeof situation !== 'string') {
+        throw new Error("Situation parameter is required and must be a string");
+      }
+      
+      try {
+        const currentTroops = gameEngine.getAllTroops();
+        const analysis = {
+          currentTroops: currentTroops.length,
+          blueTroops: currentTroops.filter(t => t.team === 'blue').length,
+          redTroops: currentTroops.filter(t => t.team === 'red').length,
+          situation: situation,
+          recommendation: "Analysez les troupes adverses et contre-attaquez avec des unités efficaces"
+        };
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(analysis, null, 2)
+          }]
+        };
+      } catch (error) {
+        throw new Error(`Failed to analyze strategy: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+
+// Handler pour les requêtes HTTP
+export async function GET() {
+  return NextResponse.json({
+    message: "Clash Royale MCP Server",
+    version: "1.0.0",
+    endpoints: {
+      tools: "POST /api/mcp/[transport]",
+      call_tool: "POST /api/mcp/[transport]"
+    },
+    availableTransports: ["tools", "call_tool", "mcp"],
+    note: "Use any transport name in the URL. All endpoints accept both tools/list and tools/call methods."
+  });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { method, params } = body;
+
+    if (method === "tools/list") {
+      return NextResponse.json({
+        tools: tools
+      });
+    } else if (method === "tools/call") {
+      const { name, arguments: args } = params;
+      const result = await executeTool(name, args);
+      return NextResponse.json(result);
+    } else {
+      return NextResponse.json({ error: "Unknown method" }, { status: 400 });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
+  }
+}
+
+
+# ====== ui/src/game/ServerSyncEngine.ts ======
+import { GameEngine } from './GameEngine';
+import { TroopType } from './types/Troop';
+
+export interface ServerGameState {
+  game_id: string;
+  troops: Array<{
+    id: string;
+    type: string;
+    team: string;
+    position: { row: number; col: number };
+    health: number;
+    max_health: number;
+  }>;
+  towers: Record<string, {
+    id: string;
+    team: string;
+    type: string;
+    health: number;
+    max_health: number;
+    position: { row: number; col: number };
+  }>;
+  elixir: { red: number; blue: number };
+  available_cards: string[];
+  game_time: number;
+  tactical_analysis: string;
+  is_game_over: boolean;
+  winner: string | null;
+}
+
+export class ServerSyncEngine extends GameEngine {
+  private gameId: string | null = null;
+  private syncInterval: NodeJS.Timeout | null = null;
+  private isAIMode: boolean = false;
+  private serverUrl: string;
+
+  constructor(serverUrl?: string) {
+    super();
+    this.serverUrl = serverUrl || process.env.NEXT_PUBLIC_MCP_SERVER_URL || 'http://localhost:8000';
+  }
+
+  public setOnUpdate(callback: (troops: any[]) => void): void {
+    this.onUpdateCallback = callback;
+  }
+
+  public setOnGameEnd(callback: (winner: 'red' | 'blue') => void): void {
+    this.onGameEndCallback = callback;
+  }
+
+  // Override problematic methods from GameEngine
+  protected cleanupDeadTroops(): void {
+    // Override to prevent errors - ServerSyncEngine manages troops differently
+    // Don't delete troops locally, let server manage lifecycle
+    // But we still need to mark them as dead locally
+    const deadTroops = Array.from(this.troops.entries())
+      .filter(([, troop]) => {
+        if (!troop || !troop.data) {
+          console.warn('Troop missing data property:', troop);
+          return false;
+        }
+        return !troop.data.isAlive;
+      })
+      .map(([id, ]) => id);
+
+    for (const id of deadTroops) {
+      // Instead of deleting, just mark as dead
+      const troop = this.troops.get(id);
+      if (troop && troop.data) {
+        troop.data.isAlive = false;
+      }
+    }
+  }
+
+  // Remove the update() override - let parent class handle game logic
+  // This allows troops to move locally using the existing GameEngine logic
+
+  public async initializeServerGame(aiMode: boolean = false): Promise<string> {
+    this.isAIMode = aiMode;
+
+    try {
+      const response = await fetch('/api/game/init', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initialize game');
+      }
+
+      const data = await response.json();
+      this.gameId = data.game_id;
+
+      // Start syncing with server
+      this.startServerSync();
+
+      return this.gameId;
+    } catch (error) {
+      console.error('Error initializing server game:', error);
+      throw error;
+    }
+  }
+
+  private startServerSync(): void {
+    if (!this.gameId) return;
+
+    console.log('🔄 Starting server sync polling for game:', this.gameId);
+
+    // Poll every 500ms for updates
+    this.syncInterval = setInterval(() => {
+      console.log('⏰ Polling server for updates...');
+      this.syncWithServer();
+    }, 500);
+  }
+
+  private async syncWithServer(): Promise<void> {
+    if (!this.gameId) return;
+
+    try {
+      const response = await fetch(`/api/game/state?game_id=${this.gameId}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch game state');
+      }
+
+      const state: ServerGameState = await response.json();
+      console.log('📦 Received server state:', {
+        troopCount: state.troops?.length || 0,
+        towerCount: Object.keys(state.towers || {}).length,
+        gameTime: state.game_time,
+        troops: state.troops
+      });
+      this.updateLocalState(state);
+    } catch (error) {
+      console.error('Error syncing with server:', error);
+    }
+  }
+
+  private updateLocalState(serverState: ServerGameState): void {
+    console.log('🔄 updateLocalState called with:', {
+      hasTroops: !!serverState.troops,
+      troopCount: serverState.troops?.length || 0
+    });
+
+    // Track existing troop IDs
+    const existingTroopIds = new Set(this.troops.keys());
+    const serverTroopIds = new Set(serverState.troops?.map(t => t.id) || []);
+
+    // Convert server troop type format (UPPER_SNAKE_CASE) to UI format (camelCase)
+    const convertTroopType = (serverType: string): string => {
+      const typeMap: Record<string, string> = {
+        'GIANT': 'giant',
+        'BABY_DRAGON': 'babyDragon',
+        'MINI_PEKKA': 'miniPekka',
+        'VALKYRIE': 'valkyrie'
+      };
+      return typeMap[serverType] || serverType.toLowerCase();
+    };
+
+    // Update troops from server (check if troops exists)
+    if (serverState.troops && Array.isArray(serverState.troops)) {
+      console.log('📊 Processing troops from server:', serverState.troops.length);
+
+      serverState.troops.forEach(serverTroop => {
+        // Check if this troop already exists locally
+        if (this.troops.has(serverTroop.id)) {
+          // Troop exists - just update health from server
+          const existingTroop = this.troops.get(serverTroop.id);
+          if (existingTroop && existingTroop.data) {
+            existingTroop.data.health = serverTroop.health;
+            existingTroop.data.isAlive = serverTroop.health > 0;
+            console.log(`📝 Updated existing troop ${serverTroop.id} health: ${serverTroop.health}`);
+          }
+        } else {
+          // New troop from server - spawn it locally
+          console.log(`🆕 New troop from server: ${serverTroop.id}`);
+
+          // Convert server troop type to UI format
+          const uiTroopType = convertTroopType(serverTroop.type);
+
+          // Spawn the troop using the parent GameEngine's spawnTroop method
+          // This will create a proper troop entity with all the movement logic
+          const troopId = super.spawnTroop(
+            uiTroopType as TroopType,
+            serverTroop.team as 'red' | 'blue',
+            serverTroop.position.row,
+            serverTroop.position.col
+          );
+
+          // Replace the auto-generated ID with the server ID
+          const spawnedTroop = this.troops.get(troopId);
+          if (spawnedTroop) {
+            this.troops.delete(troopId);
+            this.troops.set(serverTroop.id, spawnedTroop);
+            if (spawnedTroop.data) {
+              spawnedTroop.data.id = serverTroop.id;
+              spawnedTroop.data.health = serverTroop.health;
+              spawnedTroop.data.maxHealth = serverTroop.max_health || 100;
+            }
+          }
+
+          console.log('🎮 Spawned new troop locally:', {
+            id: serverTroop.id,
+            type: uiTroopType,
+            team: serverTroop.team,
+            position: serverTroop.position
+          });
+        }
+      });
+
+      // Remove troops that are no longer on the server
+      for (const localId of existingTroopIds) {
+        if (!serverTroopIds.has(localId)) {
+          console.log(`🗑️ Removing troop ${localId} (no longer on server)`);
+          this.troops.delete(localId);
+        }
+      }
+
+      console.log(`✅ Total troops in map: ${this.troops.size}`);
+    } else {
+      console.log('⚠️ No troops in server state or troops not an array');
+    }
+
+    // Update towers
+    if (serverState.towers && typeof serverState.towers === 'object') {
+      Object.entries(serverState.towers).forEach(([towerId, towerData]) => {
+      const existingTower = this.towers.get(towerId);
+      if (existingTower) {
+        // Update health
+        (existingTower as any).health = towerData.health;
+        (existingTower as any).maxHealth = towerData.max_health;
+      }
+      });
+    }
+
+    // Update game state
+    if (serverState.is_game_over && serverState.winner) {
+      this.handleGameEnd(serverState.winner as 'red' | 'blue');
+    }
+
+    // No need to manually trigger UI update here anymore
+    // The parent GameEngine's update() method will handle it
+  }
+
+  public async spawnTroopOnServer(
+    type: TroopType,
+    team: 'red' | 'blue',
+    row: number,
+    col: number
+  ): Promise<boolean> {
+    if (!this.gameId) {
+      console.error('No game ID available');
+      return false;
+    }
+
+    // Convert TroopType enum value to the format expected by Python server
+    const troopTypeMap: Record<string, string> = {
+      'giant': 'GIANT',
+      'babyDragon': 'BABY_DRAGON',
+      'miniPekka': 'MINI_PEKKA',
+      'valkyrie': 'VALKYRIE'
+    };
+
+    const serverTroopType = troopTypeMap[type] || type.toUpperCase();
+
+    const requestData = {
+      game_id: this.gameId,
+      troop_type: serverTroopType,
+      position: { row, col },
+      team,
+    };
+
+    console.log('=== SENDING SPAWN REQUEST ===');
+    console.log('Data:', JSON.stringify(requestData, null, 2));
+
+    try {
+      const response = await fetch('/api/game/spawn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to spawn troop - Response:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          console.error('Error details:', error);
+        } catch (e) {
+          console.error('Could not parse error response');
+        }
+        return false;
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Server will update state, we'll receive it via sync
+        console.log('Troop spawned successfully:', result.message);
+        return true;
+      } else {
+        console.error('Failed to spawn troop:', result.error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error spawning troop on server:', error);
+      return false;
+    }
+  }
+
+  // Override parent spawnTroop to use server
+  public spawnTroop(type: TroopType, team: 'red' | 'blue', row?: number, col?: number): string {
+    if (this.gameId) {
+      // In server mode, spawn via server
+      const spawnRow = row ?? (team === 'red' ? 10 : 23);
+      const spawnCol = col ?? 8;
+
+      this.spawnTroopOnServer(type, team, spawnRow, spawnCol);
+      return `${type}_${team}_pending`; // Return temporary ID
+    } else {
+      // Fallback to local mode
+      return super.spawnTroop(type, team, row, col);
+    }
+  }
+
+  private handleGameEnd(winner: 'red' | 'blue'): void {
+    this.gameState.isRunning = false;
+
+    if (this.onGameEndCallback) {
+      this.onGameEndCallback(winner);
+    }
+
+    this.cleanup();
+  }
+
+  private cleanup(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+
+  public stop(): void {
+    this.cleanup();
+    super.stop();
+  }
+
+  public reset(): void {
+    this.cleanup();
+    this.gameId = null;
+    super.reset();
+  }
+
+  public getGameId(): string | null {
+    return this.gameId;
+  }
+
+  public getTacticalAnalysis(): string {
+    // This would be populated from server state
+    return 'Waiting for server analysis...';
+  }
+}
+
+# ====== ui/src/game/GameEngine.ts ======
+import { GiantEntity, Giant } from './troops/Giant';
+import { BabyDragonEntity, BabyDragon } from './troops/BabyDragon';
+import { MiniPekkaEntity, MiniPekka } from './troops/MiniPekka';
+import { ValkyrieEntity, Valkyrie } from './troops/Valkyrie';
+import { BaseTroop, TroopEntity, TroopType } from './types/Troop';
+import { TowerEntity, Tower } from './types/Tower';
+
+export interface GameState {
+  isRunning: boolean;
+  isPaused: boolean;
+  gameTime: number;
+  lastUpdateTime: number;
+}
+
+export class GameEngine {
+  private troops: Map<string, TroopEntity> = new Map();
+  private towers: Map<string, TowerEntity> = new Map();
+  private gameState: GameState;
+  private animationFrameId: number | null = null;
+  private onUpdateCallback?: (troops: BaseTroop[]) => void;
+  private onGameEndCallback?: (winner: 'red' | 'blue') => void;
+
+  constructor() {
+    this.gameState = {
+      isRunning: false,
+      isPaused: false,
+      gameTime: 0,
+      lastUpdateTime: 0
+    };
+  }
+
+  public start(): void {
+    if (this.gameState.isRunning) return;
+    
+    this.gameState.isRunning = true;
+    this.gameState.isPaused = false;
+    this.gameState.lastUpdateTime = performance.now();
+    this.gameLoop();
+  }
+
+  public pause(): void {
+    this.gameState.isPaused = true;
+  }
+
+  public resume(): void {
+    if (!this.gameState.isRunning) return;
+    
+    this.gameState.isPaused = false;
+    this.gameState.lastUpdateTime = performance.now();
+    this.gameLoop();
+  }
+
+  public stop(): void {
+    this.gameState.isRunning = false;
+    this.gameState.isPaused = false;
+    
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    this.troops.clear();
+    this.towers.clear();
+  }
+
+  public reset(): void {
+    this.stop();
+    this.gameState.gameTime = 0;
+    this.gameState.lastUpdateTime = 0;
+  }
+
+  // Méthodes génériques pour les troupes
+  public spawnTroop(type: TroopType, team: 'red' | 'blue', row?: number, col?: number): string {
+    const id = `${type}_${team}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    let troop: TroopEntity;
+
+    switch (type) {
+      case TroopType.GIANT:
+        troop = row !== undefined && col !== undefined 
+          ? new GiantEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new GiantEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.BABY_DRAGON:
+        troop = row !== undefined && col !== undefined 
+          ? new BabyDragonEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new BabyDragonEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.MINI_PEKKA:
+        troop = row !== undefined && col !== undefined 
+          ? new MiniPekkaEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new MiniPekkaEntity(id, team) as unknown as TroopEntity;
+        break;
+      case TroopType.VALKYRIE:
+        troop = row !== undefined && col !== undefined 
+          ? new ValkyrieEntity(id, team, { row, col }) as unknown as TroopEntity
+          : new ValkyrieEntity(id, team) as unknown as TroopEntity;
+        break;
+      default:
+        throw new Error(`Unknown troop type: ${type}`);
+    }
+
+    this.troops.set(id, troop);
+    console.log(`${type} spawned: ${id} for team ${team}${row !== undefined && col !== undefined ? ` at (${row}, ${col})` : ''}`);
+    return id;
+  }
+
+  // Méthodes de compatibilité pour les anciens appels
+  public spawnGiant(team: 'red' | 'blue'): string {
+    return this.spawnTroop(TroopType.GIANT, team);
+  }
+
+  public spawnGiantAt(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.GIANT, team, row, col);
+  }
+
+  public spawnBabyDragon(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.BABY_DRAGON, team, row, col);
+  }
+
+  public spawnMiniPekka(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.MINI_PEKKA, team, row, col);
+  }
+
+  public spawnValkyrie(team: 'red' | 'blue', row: number, col: number): string {
+    return this.spawnTroop(TroopType.VALKYRIE, team, row, col);
+  }
+
+  public removeTroop(id: string): void {
+    this.troops.delete(id);
+  }
+
+  // Méthodes pour les tours
+  public addTower(id: string, type: 'king' | 'princess', team: 'red' | 'blue', row: number, col: number): void {
+    const tower = new TowerEntity(id, type, team, row, col);
+    this.towers.set(id, tower);
+    console.log(`Tower ${type} added: ${id} for team ${team} at (${row}, ${col})`);
+  }
+
+  public removeTower(id: string): void {
+    this.towers.delete(id);
+  }
+
+  public getTower(id: string): Tower | undefined {
+    return this.towers.get(id)?.data;
+  }
+
+  public getTowerEntity(id: string): TowerEntity | undefined {
+    return this.towers.get(id);
+  }
+
+  public getAllTowers(): Tower[] {
+    return Array.from(this.towers.values()).map(tower => tower.data);
+  }
+
+  public getActiveTowers(): Tower[] {
+    const allTowers = this.getAllTowers();
+    const activeTowers = allTowers.filter(tower => tower.active && tower.isAlive);
+    return activeTowers;
+  }
+
+  public getTroop(id: string): BaseTroop | undefined {
+    return this.troops.get(id)?.data;
+  }
+
+  public getAllTroops(): BaseTroop[] {
+    return Array.from(this.troops.values()).map(troop => troop.data);
+  }
+
+  public getTroopEntity(id: string): TroopEntity | undefined {
+    return this.troops.get(id);
+  }
+
+  public getTroopsByType(type: TroopType): BaseTroop[] {
+    return this.getAllTroops().filter(troop => troop.type === type);
+  }
+
+  public getLivingTroops(): BaseTroop[] {
+    return this.getAllTroops().filter(troop => troop.isAlive);
+  }
+
+  // Méthodes de compatibilité
+  public getAllGiants(): Giant[] {
+    return this.getTroopsByType(TroopType.GIANT) as unknown as Giant[];
+  }
+
+  public getAllBabyDragons(): BabyDragon[] {
+    return this.getTroopsByType(TroopType.BABY_DRAGON) as unknown as BabyDragon[];
+  }
+
+  public getAllMiniPekkas(): MiniPekka[] {
+    return this.getTroopsByType(TroopType.MINI_PEKKA) as unknown as MiniPekka[];
+  }
+
+  public getAllValkyries(): Valkyrie[] {
+    return this.getTroopsByType(TroopType.VALKYRIE) as unknown as Valkyrie[];
+  }
+
+  public getLivingGiants(): Giant[] {
+    return this.getAllGiants().filter(giant => giant.isAlive);
+  }
+
+  public getLivingBabyDragons(): BabyDragon[] {
+    return this.getAllBabyDragons().filter(dragon => dragon.isAlive);
+  }
+
+  public getLivingMiniPekkas(): MiniPekka[] {
+    return this.getAllMiniPekkas().filter(pekka => pekka.isAlive);
+  }
+
+  public getLivingValkyries(): Valkyrie[] {
+    return this.getAllValkyries().filter(valkyrie => valkyrie.isAlive);
+  }
+
+  public setOnUpdateCallback(callback: (troops: BaseTroop[]) => void): void {
+    this.onUpdateCallback = callback;
+  }
+
+  public setOnGameEndCallback(callback: (winner: 'red' | 'blue') => void): void {
+    this.onGameEndCallback = callback;
+  }
+
+  private gameLoop = (): void => {
+    if (!this.gameState.isRunning || this.gameState.isPaused) {
+      return;
+    }
+
+    const currentTime = performance.now();
+    const deltaTime = (currentTime - this.gameState.lastUpdateTime) / 1000; // Convert to seconds
+    
+    this.update(deltaTime);
+    
+    this.gameState.lastUpdateTime = currentTime;
+    this.gameState.gameTime += deltaTime;
+    
+    // Utiliser setTimeout pour l'environnement serveur, requestAnimationFrame pour le client
+    if (typeof window !== 'undefined') {
+      this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    } else {
+      // Environnement serveur - utiliser setTimeout
+      setTimeout(() => {
+        this.gameLoop();
+      }, 16); // ~60 FPS
+    }
+  };
+
+  protected update(deltaTime: number): void {
+    // Nettoyer les troupes mortes
+    this.cleanupDeadTroops();
+    
+    // Mettre à jour toutes les troupes vivantes
+    const activeTowers = this.getActiveTowersInternal();
+    const flaggedCells = this.getFlaggedCells();
+    
+    for (const troop of this.troops.values()) {
+      troop.update(deltaTime, activeTowers, flaggedCells, this);
+    }
+
+    // Mettre à jour les tours (attaque des ennemis)
+    this.updateTowers(deltaTime);
+
+    // Vérifier la fin de partie
+    this.checkGameEnd();
+
+    // Notifier les composants React
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback(this.getAllTroops());
+    }
+  }
+
+  protected updateTowers(deltaTime: number): void {
+    const allTroops = this.getAllTroops();
+    const allTowers = this.getActiveTowersInternal();
+
+    for (const tower of this.towers.values()) {
+      // Mettre à jour le statut canAttack pour les tours du roi
+      tower.updateCanAttackStatus(allTowers);
+      
+      // Mettre à jour la tour (recherche de cibles et attaque)
+      tower.update(deltaTime, allTroops, allTowers, this);
+    }
+  }
+
+  protected cleanupDeadTroops(): void {
+    const deadTroops = Array.from(this.troops.entries())
+      .filter(([, troop]) => {
+        // Add safety check for data property
+        if (!troop || !troop.data) {
+          console.warn('Troop missing data property:', troop);
+          return false;
+        }
+        return !troop.data.isAlive;
+      })
+      .map(([id, ]) => id);
+
+    for (const id of deadTroops) {
+      this.troops.delete(id);
+    }
+  }
+
+  private checkGameEnd(): void {
+    // Vérifier si une King Tower est détruite
+    const kingRed = this.towers.get('king_red');
+    const kingBlue = this.towers.get('king_blue');
+
+    // Add safety checks for tower data
+    if (kingRed && kingRed.data && !kingRed.data.isAlive) {
+      // King Rouge détruite → Bleu gagne
+      console.log('Game Over: Blue team wins! King Red destroyed');
+      this.endGame('blue');
+    } else if (kingBlue && kingBlue.data && !kingBlue.data.isAlive) {
+      // King Bleue détruite → Rouge gagne
+      console.log('Game Over: Red team wins! King Blue destroyed');
+      this.endGame('red');
+    }
+  }
+
+  private endGame(winner: 'red' | 'blue'): void {
+    this.gameState.isRunning = false;
+    
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    // Notifier la fin de partie
+    if (this.onGameEndCallback) {
+      this.onGameEndCallback(winner);
+    }
+  }
+
+  private getActiveTowersInternal(): Tower[] {
+    return this.getActiveTowers();
+  }
+
+  private getFlaggedCells(): Set<string> {
+    // Cette fonction sera connectée avec les flagged cells de l'Arena
+    return new Set<string>();
+  }
+
+
+  public connectFlaggedCells(flaggedCells: Set<string>): void {
+    // Méthode pour connecter les flagged cells depuis Arena
+    this.getFlaggedCells = () => flaggedCells;
+  }
+
+  // Méthode pour trouver l'ennemi le plus proche (troupe ou tour)
+  public findClosestEnemy(troop: BaseTroop): { target: any, distance: number } | null {
+    const activeTowers = this.getActiveTowersInternal();
+    const enemyTroops = this.getAllTroops().filter(t => 
+      t.team !== troop.team && t.isAlive
+    );
+
+    let closestTarget: any = null;
+    let closestDistance = Infinity;
+
+    // Vérifier les tours ennemies (toujours accessibles)
+    activeTowers.forEach(tower => {
+      if (tower.team !== troop.team) {
+        const distance = Math.sqrt(
+          Math.pow(tower.row - troop.position.row, 2) +
+          Math.pow(tower.col - troop.position.col, 2)
+        );
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestTarget = { ...tower, type: 'tower' };
+        }
+      }
+    });
+
+    // Vérifier les troupes ennemies (avec restriction flying vs non-flying et côté de la rivière)
+    enemyTroops.forEach(enemyTroop => {
+      // Non-flying troops cannot target flying troops
+      if (!troop.flying && enemyTroop.flying) {
+        return; // Skip flying troops for non-flying attackers
+      }
+      
+      // Pour les troupes non-volantes, vérifier qu'elles sont du même côté de la rivière
+      if (!troop.flying) {
+        const frontierRow = 16;
+        const troopSide = troop.position.row <= frontierRow ? 'top' : 'bottom';
+        const enemySide = enemyTroop.position.row <= frontierRow ? 'top' : 'bottom';
+        
+        if (troopSide !== enemySide) {
+          return; // Skip enemies on opposite side of river for non-flying troops
+        }
+      }
+      
+      const distance = Math.sqrt(
+        Math.pow(enemyTroop.position.row - troop.position.row, 2) +
+        Math.pow(enemyTroop.position.col - troop.position.col, 2)
+      );
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestTarget = { ...enemyTroop, type: 'troop' };
+      }
+    });
+
+    return closestTarget ? { target: closestTarget, distance: closestDistance } : null;
+  }
+
+  // Méthodes utilitaires pour les statistiques
+  public getGameStats() {
+    const allTroops = this.getAllTroops();
+    const livingTroops = this.getLivingTroops();
+    const giants = this.getAllGiants();
+    const babyDragons = this.getAllBabyDragons();
+    const miniPekkas = this.getAllMiniPekkas();
+    const valkyries = this.getAllValkyries();
+    
+    return {
+      totalTroops: allTroops.length,
+      livingTroops: livingTroops.length,
+      redTroops: allTroops.filter(t => t.team === 'red').length,
+      blueTroops: allTroops.filter(t => t.team === 'blue').length,
+      // Statistiques par type
+      totalGiants: giants.length,
+      livingGiants: giants.filter(g => g.isAlive).length,
+      redGiants: giants.filter(g => g.team === 'red').length,
+      blueGiants: giants.filter(g => g.team === 'blue').length,
+      totalBabyDragons: babyDragons.length,
+      livingBabyDragons: babyDragons.filter(d => d.isAlive).length,
+      redBabyDragons: babyDragons.filter(d => d.team === 'red').length,
+      blueBabyDragons: babyDragons.filter(d => d.team === 'blue').length,
+      totalMiniPekkas: miniPekkas.length,
+      livingMiniPekkas: miniPekkas.filter(p => p.isAlive).length,
+      redMiniPekkas: miniPekkas.filter(p => p.team === 'red').length,
+      blueMiniPekkas: miniPekkas.filter(p => p.team === 'blue').length,
+      totalValkyries: valkyries.length,
+      livingValkyries: valkyries.filter(v => v.isAlive).length,
+      redValkyries: valkyries.filter(v => v.team === 'red').length,
+      blueValkyries: valkyries.filter(v => v.team === 'blue').length,
+      // État du jeu
+      gameTime: this.gameState.gameTime,
+      isRunning: this.gameState.isRunning,
+      isPaused: this.gameState.isPaused
+    };
+  }
+}
+
+// Instance singleton du moteur de jeu
+export const gameEngine = new GameEngine();
+
+
+# ====== ui/src/app/page.tsx ======
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import TransitionScreen from "@/components/TransitionScreen";
+
+export default function Home() {
+  const [showTransition, setShowTransition] = useState(false);
+
+  const handleCombatClick = () => {
+    setShowTransition(true);
+  };
+
+  return (
+    <>
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        {/* Fond flou */}
+        <img
+          src="/images/backgrounds/goal.png"
+          alt="Goal Background Blurred"
+          className="absolute inset-0 w-full h-full object-cover blur-sm"
+        />
+        
+        {/* Container avec ratio 9/16 */}
+        <div className="relative w-[56.25vh] h-screen max-w-full max-h-screen z-10">
+          <img
+            src="/images/backgrounds/goal.png"
+            alt="Goal Background"
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Bouton jouer stylisé */}
+          <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center">
+            <Button 
+              onClick={handleCombatClick}
+              className="bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 text-white font-bold py-10 px-7 rounded-2xl text-2xl transition-all duration-300 shadow-2xl border-4 border-yellow-300"
+            >
+              Combat
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Écran de transition */}
+      {showTransition && (
+        <TransitionScreen 
+          onTransitionComplete={() => setShowTransition(false)}
+        />
+      )}
+    </>
+  );
+}
+
+
+# ====== ui/src/game/useGameEngine.ts ======
+import { useState, useEffect, useCallback } from 'react';
+import { gameEngine } from './GameEngine';
+import { Giant } from './troops/Giant';
+import { BabyDragon } from './troops/BabyDragon';
+import { MiniPekka } from './troops/MiniPekka';
+import { Valkyrie } from './troops/Valkyrie';
+import { BaseTroop, TroopType } from './types/Troop';
+import { Tower } from './types/Tower';
+
+export interface GameHookReturn {
+  // Troupes génériques
+  troops: BaseTroop[];
+  // Troupes par type (pour compatibilité)
+  giants: Giant[];
+  babyDragons: BabyDragon[];
+  miniPekkas: MiniPekka[];
+  valkyries: Valkyrie[];
+  // Tours avec leur santé mise à jour
+  towers: Tower[];
+  // État de fin de partie
+  gameEnded: boolean;
+  winner: 'red' | 'blue' | null;
+  // Méthodes génériques
+  spawnTroop: (type: TroopType, team: 'red' | 'blue', row: number, col: number) => void;
+  // Méthodes spécifiques (pour compatibilité)
+  spawnGiantAt: (team: 'red' | 'blue', row: number, col: number) => void;
+  spawnBabyDragon: (team: 'red' | 'blue', row: number, col: number) => void;
+  spawnMiniPekka: (team: 'red' | 'blue', row: number, col: number) => void;
+  spawnValkyrie: (team: 'red' | 'blue', row: number, col: number) => void;
+  // Contrôles du jeu
+  gameStats: {
+    totalTroops: number;
+    livingTroops: number;
+    redTroops: number;
+    blueTroops: number;
+    totalGiants: number;
+    livingGiants: number;
+    redGiants: number;
+    blueGiants: number;
+    totalBabyDragons: number;
+    livingBabyDragons: number;
+    redBabyDragons: number;
+    blueBabyDragons: number;
+    totalMiniPekkas: number;
+    livingMiniPekkas: number;
+    redMiniPekkas: number;
+    blueMiniPekkas: number;
+    totalValkyries: number;
+    livingValkyries: number;
+    redValkyries: number;
+    blueValkyries: number;
+    gameTime: number;
+    isRunning: boolean;
+    isPaused: boolean;
+  };
+  startGame: () => void;
+  pauseGame: () => void;
+  resumeGame: () => void;
+  stopGame: () => void;
+  resetGame: () => void;
+  isGameRunning: boolean;
+  isGamePaused: boolean;
+}
+
+export const useGameEngine = (towers?: Tower[], flaggedCells?: Set<string>): GameHookReturn => {
+  const [troops, setTroops] = useState<BaseTroop[]>([]);
+  const [giants, setGiants] = useState<Giant[]>([]);
+  const [babyDragons, setBabyDragons] = useState<BabyDragon[]>([]);
+  const [miniPekkas, setMiniPekkas] = useState<MiniPekka[]>([]);
+  const [valkyries, setValkyries] = useState<Valkyrie[]>([]);
+  const [gameTowers, setGameTowers] = useState<Tower[]>([]);
+  const [gameStats, setGameStats] = useState(gameEngine.getGameStats());
+  const [gameEnded, setGameEnded] = useState<boolean>(false);
+  const [winner, setWinner] = useState<'red' | 'blue' | null>(null);
+
+  // Mettre à jour les troupes et tours quand le moteur les modifie
+  const handleGameUpdate = useCallback((updatedTroops: BaseTroop[]) => {
+    setTroops([...updatedTroops]);
+    // Séparer par type pour compatibilité
+    setGiants([...updatedTroops.filter(t => t.type === TroopType.GIANT)] as unknown as Giant[]);
+    setBabyDragons([...updatedTroops.filter(t => t.type === TroopType.BABY_DRAGON)] as unknown as BabyDragon[]);
+    setMiniPekkas([...updatedTroops.filter(t => t.type === TroopType.MINI_PEKKA)] as unknown as MiniPekka[]);
+    setValkyries([...updatedTroops.filter(t => t.type === TroopType.VALKYRIE)] as unknown as Valkyrie[]);
+    // Mettre à jour les tours avec leur santé actuelle
+    setGameTowers([...gameEngine.getAllTowers()]);
+    setGameStats(gameEngine.getGameStats());
+  }, []);
+
+  // Gérer la fin de partie
+  const handleGameEnd = useCallback((gameWinner: 'red' | 'blue') => {
+    setGameEnded(true);
+    setWinner(gameWinner);
+  }, []);
+
+  // Configurer le callback du moteur de jeu
+  useEffect(() => {
+    gameEngine.setOnUpdateCallback(handleGameUpdate);
+    gameEngine.setOnGameEndCallback(handleGameEnd);
+    
+    return () => {
+      gameEngine.setOnUpdateCallback(() => {});
+      gameEngine.setOnGameEndCallback(() => {});
+    };
+  }, [handleGameUpdate, handleGameEnd]);
+
+  // Connecter les flagged cells au moteur de jeu
+  useEffect(() => {
+    if (flaggedCells) {
+      gameEngine.connectFlaggedCells(flaggedCells);
+    }
+  }, [flaggedCells]);
+
+  // Fonctions de contrôle du jeu
+  const spawnTroop = useCallback((type: TroopType, team: 'red' | 'blue', row: number, col: number) => {
+    gameEngine.spawnTroop(type, team, row, col);
+  }, []);
+
+  const spawnGiantAt = useCallback((team: 'red' | 'blue', row: number, col: number) => {
+    gameEngine.spawnGiantAt(team, row, col);
+  }, []);
+
+  const spawnBabyDragon = useCallback((team: 'red' | 'blue', row: number, col: number) => {
+    gameEngine.spawnBabyDragon(team, row, col);
+  }, []);
+
+  const spawnMiniPekka = useCallback((team: 'red' | 'blue', row: number, col: number) => {
+    gameEngine.spawnMiniPekka(team, row, col);
+  }, []);
+
+  const spawnValkyrie = useCallback((team: 'red' | 'blue', row: number, col: number) => {
+    gameEngine.spawnValkyrie(team, row, col);
+  }, []);
+
+  const startGame = useCallback(() => {
+    gameEngine.start();
+    setGameStats(gameEngine.getGameStats());
+  }, []);
+
+  const pauseGame = useCallback(() => {
+    gameEngine.pause();
+    setGameStats(gameEngine.getGameStats());
+  }, []);
+
+  const resumeGame = useCallback(() => {
+    gameEngine.resume();
+    setGameStats(gameEngine.getGameStats());
+  }, []);
+
+  const stopGame = useCallback(() => {
+    gameEngine.stop();
+    setTroops([]);
+    setGiants([]);
+    setBabyDragons([]);
+    setMiniPekkas([]);
+    setValkyries([]);
+    setGameStats(gameEngine.getGameStats());
+  }, []);
+
+  const resetGame = useCallback(() => {
+    gameEngine.reset();
+    setTroops([]);
+    setGiants([]);
+    setBabyDragons([]);
+    setMiniPekkas([]);
+    setValkyries([]);
+    setGameStats(gameEngine.getGameStats());
+    setGameEnded(false);
+    setWinner(null);
+    
+    // Réinitialiser les tours à leur santé maximale
+    if (towers) {
+      towers.forEach(tower => {
+        gameEngine.addTower(tower.id, tower.type, tower.team, tower.row, tower.col);
+      });
+    }
+  }, [towers]);
+
+  // Cleanup à la destruction du composant
+  useEffect(() => {
+    return () => {
+      gameEngine.stop();
+    };
+  }, []);
+
+  return {
+    // Troupes génériques
+    troops,
+    // Troupes par type (pour compatibilité)
+    giants,
+    babyDragons,
+    miniPekkas,
+    valkyries,
+    // Tours avec leur santé mise à jour
+    towers: gameTowers,
+    // État de fin de partie
+    gameEnded,
+    winner,
+    // Méthodes génériques
+    spawnTroop,
+    // Méthodes spécifiques (pour compatibilité)
+    spawnGiantAt,
+    spawnBabyDragon,
+    spawnMiniPekka,
+    spawnValkyrie,
+    // Contrôles du jeu
+    gameStats,
+    startGame,
+    pauseGame,
+    resumeGame,
+    stopGame,
+    resetGame,
+    isGameRunning: gameStats.isRunning,
+    isGamePaused: gameStats.isPaused
+  };
+};
+

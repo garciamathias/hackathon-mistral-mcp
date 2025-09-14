@@ -1,28 +1,17 @@
+// ui/src/app/api/mcp/[transport]/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { gameEngine } from "@/game/GameEngine";
 import { TroopType } from "@/game/types/Troop";
 
-// Interface pour les outils MCP
-interface MCPTool {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: string;
-    properties: Record<string, any>;
-    required: string[];
-  };
-}
-
-// Définition des outils disponibles
-const tools: MCPTool[] = [
+type JsonRpcReq = { jsonrpc?: "2.0"; id?: number | string | null; method: string; params?: any };
+const tools = [
   {
     name: "start_game",
     description: "Démarre une nouvelle partie de Clash Royale",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: []
-    }
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "deploy_troop",
@@ -30,207 +19,151 @@ const tools: MCPTool[] = [
     inputSchema: {
       type: "object",
       properties: {
-        troopType: {
-          type: "string",
-          enum: ["giant", "babyDragon", "miniPekka", "valkyrie"],
-          description: "Type de troupe à déployer"
-        },
-        row: {
-          type: "number",
-          description: "Position ligne (0-31)"
-        },
-        col: {
-          type: "number",
-          description: "Position colonne (0-17)"
-        },
-        team: {
-          type: "string",
-          enum: ["red", "blue"],
-          description: "Équipe (rouge ou bleue)"
-        }
+        troopType: { type: "string", enum: ["giant", "babyDragon", "miniPekka", "valkyrie"] },
+        row: { type: "number" },
+        col: { type: "number" },
+        team: { type: "string", enum: ["red", "blue"] },
       },
-      required: ["troopType", "row", "col", "team"]
-    }
+      required: ["troopType", "row", "col", "team"],
+    },
   },
   {
     name: "get_game_state",
     description: "Récupère l'état actuel du jeu (troupes, tours, statistiques)",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: []
-    }
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
     name: "analyze_strategy",
     description: "Analyse une stratégie Clash Royale",
     inputSchema: {
       type: "object",
-      properties: {
-        situation: {
-          type: "string",
-          description: "Description de la situation de jeu"
-        }
-      },
-      required: ["situation"]
-    }
-  }
+      properties: { situation: { type: "string" } },
+      required: ["situation"],
+    },
+  },
 ];
 
-// Fonction pour exécuter un outil
 async function executeTool(name: string, args: any) {
   switch (name) {
-    case "start_game":
-      try {
-        gameEngine.start();
-        const stats = gameEngine.getGameStats();
-        return {
-          content: [{
+    case "start_game": {
+      gameEngine.start();
+      const stats = gameEngine.getGameStats();
+      return { content: [{ type: "text", text: JSON.stringify({ status: "Game started", stats }, null, 2) }] };
+    }
+    case "deploy_troop": {
+      const { troopType, row, col, team } = args ?? {};
+      const validType = ["giant", "babyDragon", "miniPekka", "valkyrie"];
+      const validTeam = ["red", "blue"];
+      if (!validType.includes(troopType)) throw new Error("Invalid troopType");
+      if (typeof row !== "number" || row < 0 || row > 31) throw new Error("Invalid row");
+      if (typeof col !== "number" || col < 0 || col > 17) throw new Error("Invalid col");
+      if (!validTeam.includes(team)) throw new Error("Invalid team");
+      gameEngine.spawnTroop(troopType as TroopType, team as "red" | "blue", row, col);
+      const last = gameEngine.getAllTroops().slice(-1)[0];
+      return {
+        content: [
+          {
             type: "text",
-            text: JSON.stringify({
-              status: "Game started",
-              gameStats: stats
-            }, null, 2)
-          }]
-        };
-      } catch (error) {
-        throw new Error(`Failed to start game: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-    case "deploy_troop":
-      const { troopType, row, col, team } = args;
-      
-      // Validation complète des arguments
-      const validTroopTypes = ["giant", "babyDragon", "miniPekka", "valkyrie"];
-      const validTeams = ["red", "blue"];
-      
-      if (!troopType || !validTroopTypes.includes(troopType)) {
-        throw new Error(`Invalid troopType. Must be one of: ${validTroopTypes.join(", ")}`);
-      }
-      
-      if (typeof row !== 'number' || row < 0 || row > 31) {
-        throw new Error("Invalid row. Must be a number between 0 and 31");
-      }
-      
-      if (typeof col !== 'number' || col < 0 || col > 17) {
-        throw new Error("Invalid col. Must be a number between 0 and 17");
-      }
-      
-      if (!team || !validTeams.includes(team)) {
-        throw new Error(`Invalid team. Must be one of: ${validTeams.join(", ")}`);
-      }
-      
-      try {
-        gameEngine.spawnTroop(troopType as TroopType, team as 'red' | 'blue', row, col);
-        const troops = gameEngine.getAllTroops();
-        const lastTroop = troops[troops.length - 1];
-        
-        if (!lastTroop) {
-          throw new Error("Failed to spawn troop");
-        }
-        
-        return {
-          content: [{
+            text: JSON.stringify(
+              {
+                status: "Troop deployed",
+                troop: last && {
+                  id: last.id,
+                  type: last.type,
+                  team: last.team,
+                  position: last.position,
+                  health: last.health,
+                },
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+    case "get_game_state": {
+      return {
+        content: [
+          {
             type: "text",
-            text: JSON.stringify({
-              status: "Troop deployed",
-              troop: {
-                id: lastTroop.id,
-                type: lastTroop.type,
-                team: lastTroop.team,
-                position: { row: lastTroop.row, col: lastTroop.col },
-                health: lastTroop.health
-              }
-            }, null, 2)
-          }]
-        };
-      } catch (error) {
-        throw new Error(`Failed to deploy troop: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-    case "get_game_state":
-      try {
-        const allTroops = gameEngine.getAllTroops();
-        const allTowers = gameEngine.getAllTowers();
-        const gameStats = gameEngine.getGameStats();
-        
-        return {
-          content: [{
+            text: JSON.stringify(
+              {
+                troops: gameEngine.getAllTroops(),
+                towers: gameEngine.getAllTowers(),
+                gameStats: gameEngine.getGameStats(),
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+    case "analyze_strategy": {
+      const { situation } = args ?? {};
+      if (typeof situation !== "string") throw new Error("situation must be a string");
+      const ts = gameEngine.getAllTroops();
+      return {
+        content: [
+          {
             type: "text",
-            text: JSON.stringify({
-              troops: allTroops,
-              towers: allTowers,
-              gameStats: gameStats
-            }, null, 2)
-          }]
-        };
-      } catch (error) {
-        throw new Error(`Failed to get game state: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
-    case "analyze_strategy":
-      const { situation } = args;
-      if (!situation || typeof situation !== 'string') {
-        throw new Error("Situation parameter is required and must be a string");
-      }
-      
-      try {
-        const currentTroops = gameEngine.getAllTroops();
-        const analysis = {
-          currentTroops: currentTroops.length,
-          blueTroops: currentTroops.filter(t => t.team === 'blue').length,
-          redTroops: currentTroops.filter(t => t.team === 'red').length,
-          situation: situation,
-          recommendation: "Analysez les troupes adverses et contre-attaquez avec des unités efficaces"
-        };
-        
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify(analysis, null, 2)
-          }]
-        };
-      } catch (error) {
-        throw new Error(`Failed to analyze strategy: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-
+            text: JSON.stringify(
+              {
+                situation,
+                currentTroops: ts.length,
+                blueTroops: ts.filter((t) => t.team === "blue").length,
+                redTroops: ts.filter((t) => t.team === "red").length,
+                recommendation: "Analysez les troupes adverses et contre-attaquez avec des unités efficaces",
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
 }
 
-// Handler pour les requêtes HTTP
-export async function GET() {
-  return NextResponse.json({
-    message: "Clash Royale MCP Server",
-    version: "1.0.0",
-    endpoints: {
-      tools: "POST /api/mcp/[transport]",
-      call_tool: "POST /api/mcp/[transport]"
-    },
-    availableTransports: ["tools", "call_tool", "mcp"],
-    note: "Use any transport name in the URL. All endpoints accept both tools/list and tools/call methods."
-  });
+function jsonRpcResult(id: any, result: any) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, result }, { headers: { "Content-Type": "application/json" } });
+}
+function jsonRpcError(id: any, code: number, message: string) {
+  return NextResponse.json({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }, { headers: { "Content-Type": "application/json" } });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { method, params } = body;
+    const body = (await req.json()) as JsonRpcReq;
+    const { id, method, params } = body;
 
-    if (method === "tools/list") {
-      return NextResponse.json({
-        tools: tools
-      });
-    } else if (method === "tools/call") {
-      const { name, arguments: args } = params;
-      const result = await executeTool(name, args);
-      return NextResponse.json(result);
-    } else {
-      return NextResponse.json({ error: "Unknown method" }, { status: 400 });
+    if (method === "server/info") {
+      return jsonRpcResult(id, { name: "clash-royale-mcp", version: "1.0.0", capabilities: { tools: {} } });
     }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    if (method === "tools/list") {
+      return jsonRpcResult(id, { tools });
+    }
+    if (method === "tools/call") {
+      const { name, arguments: args } = params ?? {};
+      if (!name) return jsonRpcError(id, -32602, "Missing tool name");
+      try {
+        const out = await executeTool(name, args ?? {});
+        return jsonRpcResult(id, out);
+      } catch (e: any) {
+        return jsonRpcError(id, -32000, e?.message ?? "Tool error");
+      }
+    }
+
+    return jsonRpcError(id, -32601, "Method not found");
+  } catch (e: any) {
+    return jsonRpcError(null, -32700, "Parse error");
   }
+}
+
+// Optionnel : GET utile pour debug rapide
+export function GET() {
+  return NextResponse.json({ ok: true, endpoint: "MCP streamable", methods: ["server/info", "tools/list", "tools/call"] });
 }
