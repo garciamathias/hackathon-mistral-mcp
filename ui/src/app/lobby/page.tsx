@@ -31,7 +31,7 @@ export default function Lobby() {
           sessionStorage.setItem("playerId", response.playerState.id);
           sessionStorage.setItem("playerName", response.playerState.name);
         }
-        router.push("/arena?mode=online");
+        router.push(`/${matchId}`);
       } else {
         setError("Failed to join match");
       }
