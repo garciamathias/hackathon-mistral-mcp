@@ -48,7 +48,7 @@ async function executeTool(name: string, args: any) {
     }
     case "get_game_state": {
       const gameId = args?.game_id;
-      const data = await proxyApi(`/api/game/state?game_id=${gameId}`, { method: "GET" });
+      const data = await proxyApi(`/api/game/${gameId}/state`, { method: "GET" });
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
     case "analyze_strategy": {

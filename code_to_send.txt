@@ -3,15 +3,19 @@
 import { NextResponse } from "next/server";
 import { getGame, updateGameTime } from "@/lib/gameStore";
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const game = getGame(params.id);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+
+  const game = getGame(id);
   if (!game) return NextResponse.json({ error: "Game not found" }, { status: 404 });
-  
-  // Mettre à jour le temps et l'elixir avant de retourner l'état
-  const updatedGame = updateGameTime(params.id);
+
+  const updatedGame = updateGameTime(id);
   if (!updatedGame) return NextResponse.json({ error: "Game not found" }, { status: 404 });
-  
-  return NextResponse.json(updatedGame);
+
+  return NextResponse.json(updatedGame, { headers: { "Cache-Control": "no-store" } });
 }
 
 
@@ -29,15 +33,33 @@ import { NextResponse } from "next/server";
 import { spawnTroop } from "@/lib/gameStore";
 
 export async function POST(req: Request) {
-  const { game_id, troop_type, position, team } = await req.json();
-  const game = spawnTroop(game_id, troop_type, team, position);
-  if (!game) return NextResponse.json({ error: "Game not found or invalid" }, { status: 400 });
+  const body = await req.json().catch(() => null);
+  const { game_id, troop_type, position, team } = body || {};
 
-  return NextResponse.json({
-    success: true,
-    message: `Spawned ${troop_type} for team ${team}`,
-    state: game,
-  });
+  // Validation de surface
+  if (
+    typeof game_id !== "string" ||
+    typeof troop_type !== "string" ||
+    (team !== "red" && team !== "blue") ||
+    !position ||
+    typeof position.row !== "number" ||
+    typeof position.col !== "number"
+  ) {
+    return NextResponse.json({ error: "Bad payload" }, { status: 400 });
+  }
+
+  try {
+    const game = spawnTroop(game_id, troop_type, team, position);
+    if (!game) return NextResponse.json({ error: "Game not found or invalid" }, { status: 404 });
+
+    return NextResponse.json({
+      success: true,
+      message: `Spawned ${troop_type} for team ${team}`,
+      state: game,
+    });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Spawn failed" }, { status: 422 });
+  }
 }
 
 # ====== ui/src/app/api/mcp/[transport]/route.ts ======
@@ -91,7 +113,7 @@ async function executeTool(name: string, args: any) {
     }
     case "get_game_state": {
       const gameId = args?.game_id;
-      const data = await proxyApi(`/api/game/state?game_id=${gameId}`, { method: "GET" });
+      const data = await proxyApi(`/api/game/${gameId}/state`, { method: "GET" });
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     }
     case "analyze_strategy": {
@@ -195,8 +217,10 @@ export default function Arena() {
     
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/game/${gameId}/state`);
+        const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
+        if (!res.ok) return;
         const data = await res.json();
+        if (!data || data.error) return;
         setGameState(data);
       } catch (error) {
         console.error("Failed to fetch game state:", error);
@@ -233,10 +257,18 @@ export default function Arena() {
   const handleCellDragOver = (e: React.DragEvent) => e.preventDefault();
   const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
 
+  const normalizeType = (s: any): TroopType | null => {
+    const u = String(s || "").toUpperCase();
+    if (u === "GIANT" || u === "BABY_DRAGON" || u === "MINI_PEKKA" || u === "VALKYRIE") return u as TroopType;
+    console.warn("Unknown troop.type from API:", s);
+    return null;
+  };
+
   const getTroopGifPath = (troop: any) => {
-    const config = TROOP_CONFIGS[troop.type as TroopType];
-    if (!config) return null;
-    // Pour l'instant, utiliser les chemins de marche par défaut
+    const norm = normalizeType(troop?.type);
+    if (!norm) return null;
+    const config = TROOP_CONFIGS[norm];
+    if (!config?.gifPaths?.walk) return null;
     const gifType = troop.team === 'red' ? 'player' : 'opponent';
     return `${config.gifPaths.walk[gifType]}?v=${troop.id}`;
   };
@@ -247,6 +279,9 @@ export default function Arena() {
 
   if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
   if (!gameState) return <div>Loading game...</div>;
+
+  // Debug: log les troupes reçues
+  console.log("TROUPES REÇUES:", gameState?.troops);
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -317,31 +352,38 @@ export default function Arena() {
                     );
                   })()}
 
-                  {gameState.troops
-                    .filter(troop => Math.floor(troop.position.row) === row && Math.floor(troop.position.col) === col)
-                    .map(troop => {
-                      const gifPath = getTroopGifPath(troop);
-                      const config = TROOP_CONFIGS[troop.type as TroopType];
+                  {(gameState.troops ?? [])
+                    .filter(t => {
+                      const p = t?.position;
+                      return p && Number.isFinite(p.row) && Number.isFinite(p.col)
+                        && Math.floor(p.row) === row && Math.floor(p.col) === col;
+                    })
+                    .map(t => {
+                      const norm = normalizeType(t.type);
+                      if (!norm) return null;
+                      const config = TROOP_CONFIGS[norm];
+                      const gifPath = getTroopGifPath(t);
                       if (!gifPath || !config) return null;
+                      const p = t.position;
+                      const hp = typeof t.health === "number" ? t.health : 0;
+                      const maxhp = typeof t.max_health === "number" && t.max_health > 0 ? t.max_health : 1;
+
                       return (
                         <div
-                          key={troop.id}
+                          key={t.id}
                           className="absolute z-20 w-full h-full flex items-center justify-center pointer-events-none"
-                          style={{ transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)` }}
+                          style={{ transform: `translate(${(p.col - Math.floor(p.col)) * 100}%, ${(p.row - Math.floor(p.row)) * 100}%)` }}
                         >
                           <img
-                            key={`${troop.id}-walk`}
                             src={gifPath}
-                            alt={`${troop.type} ${troop.team}`}
+                            alt={`${norm} ${t.team}`}
                             className="w-12 h-12 object-contain"
-                            style={{
-                              transform: `scale(${typeof config.scale === 'object' ? config.scale.walk : config.scale})`,
-                            }}
+                            style={{ transform: `scale(${typeof config.scale === 'object' ? config.scale.walk : config.scale})` }}
                           />
                           <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
                             <div
-                              className={`h-full rounded transition-all duration-200 ${troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
-                              style={{ width: `${(troop.health / troop.max_health) * 100}%` }}
+                              className={`h-full rounded transition-all duration-200 ${t.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
+                              style={{ width: `${(hp / maxhp) * 100}%` }}
                             />
                           </div>
                         </div>
@@ -356,6 +398,13 @@ export default function Arena() {
         <div className="absolute top-4 right-4 z-10">
           <ClashTimer />
         </div>
+
+        {/* Debug: affichage temporaire de tous les troops */}
+        {(gameState.troops ?? []).map(t => (
+          <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
+            {t.type} {t.team} @ {t.position.row},{t.position.col}
+          </div>
+        ))}
 
         {/* Barre de cartes */}
         <div className="fixed bottom-0 left-0 right-0 z-10">
@@ -1175,6 +1224,28 @@ import { v4 as uuidv4 } from "uuid";
 export type TroopType = "GIANT" | "BABY_DRAGON" | "MINI_PEKKA" | "VALKYRIE";
 export type Team = "red" | "blue";
 
+const BOARD_ROWS = 34;
+const BOARD_COLS = 18;
+
+function isValidTroopType(x: unknown): x is TroopType {
+  return x === "GIANT" || x === "BABY_DRAGON" || x === "MINI_PEKKA" || x === "VALKYRIE";
+}
+function isValidTeam(x: unknown): x is Team {
+  return x === "red" || x === "blue";
+}
+function isValidPosition(p: any): p is { row: number; col: number } {
+  return p && Number.isFinite(p.row) && Number.isFinite(p.col);
+}
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+function sanitizePosition(pos: { row: number; col: number }) {
+  // Discrétise sur la grille et clamp dans les bornes
+  const row = clamp(Math.floor(pos.row), 0, BOARD_ROWS - 1);
+  const col = clamp(Math.floor(pos.col), 0, BOARD_COLS - 1);
+  return { row, col };
+}
+
 export interface Troop {
   id: string;
   type: TroopType;
@@ -1211,57 +1282,14 @@ export interface GameState {
 
 const games = new Map<string, GameState>();
 
-// === HELPERS ===
 function defaultTowers(): Record<string, Tower> {
   return {
-    king_red: {
-      id: "king_red",
-      team: "red",
-      type: "king",
-      health: 100,
-      max_health: 100,
-      position: { row: 2, col: 8 },
-    },
-    princess_red_left: {
-      id: "princess_red_left",
-      team: "red",
-      type: "princess",
-      health: 100,
-      max_health: 100,
-      position: { row: 6, col: 3 },
-    },
-    princess_red_right: {
-      id: "princess_red_right",
-      team: "red",
-      type: "princess",
-      health: 100,
-      max_health: 100,
-      position: { row: 6, col: 14 },
-    },
-    king_blue: {
-      id: "king_blue",
-      team: "blue",
-      type: "king",
-      health: 100,
-      max_health: 100,
-      position: { row: 31, col: 8 },
-    },
-    princess_blue_left: {
-      id: "princess_blue_left",
-      team: "blue",
-      type: "princess",
-      health: 100,
-      max_health: 100,
-      position: { row: 27, col: 3 },
-    },
-    princess_blue_right: {
-      id: "princess_blue_right",
-      team: "blue",
-      type: "princess",
-      health: 100,
-      max_health: 100,
-      position: { row: 27, col: 14 },
-    },
+    king_red:   { id: "king_red",   team: "red",  type: "king",     health: 100, max_health: 100, position: { row: 2,  col: 8 } },
+    princess_red_left:  { id: "princess_red_left",  team: "red",  type: "princess", health: 100, max_health: 100, position: { row: 6,  col: 3 } },
+    princess_red_right: { id: "princess_red_right", team: "red",  type: "princess", health: 100, max_health: 100, position: { row: 6,  col: 14 } },
+    king_blue:  { id: "king_blue",  team: "blue", type: "king",     health: 100, max_health: 100, position: { row: 31, col: 8 } },
+    princess_blue_left: { id: "princess_blue_left", team: "blue", type: "princess", health: 100, max_health: 100, position: { row: 27, col: 3 } },
+    princess_blue_right:{ id: "princess_blue_right",team: "blue", type: "princess", health: 100, max_health: 100, position: { row: 27, col: 14 } },
   };
 }
 
@@ -1289,14 +1317,21 @@ export function getGame(id: string): GameState | null {
   return games.get(id) || null;
 }
 
+// Invariant durci: aucune troupe n'est insérée sans position valide.
 export function spawnTroop(
   id: string,
-  troop_type: TroopType,
-  team: Team,
-  position: { row: number; col: number }
+  troop_type: unknown,
+  team: unknown,
+  position: unknown
 ): GameState | null {
   const game = games.get(id);
   if (!game) return null;
+
+  if (!isValidTroopType(troop_type)) throw new Error("Invalid troop_type");
+  if (!isValidTeam(team)) throw new Error("Invalid team");
+  if (!isValidPosition(position)) throw new Error("Invalid position");
+
+  const pos = sanitizePosition(position);
 
   const costs: Record<TroopType, number> = {
     GIANT: 5,
@@ -1305,13 +1340,16 @@ export function spawnTroop(
     VALKYRIE: 4,
   };
 
-  if (game.elixir[team] < costs[troop_type]) return game;
+  if (game.elixir[team] < costs[troop_type]) {
+    // Pas d'insertion si elixir insuffisant
+    return game;
+  }
 
   const troop: Troop = {
     id: `${troop_type}_${team}_${game.troops.length}_${Math.random().toString(16).slice(2, 8)}`,
     type: troop_type,
     team,
-    position,
+    position: pos,
     health: 100,
     max_health: 100,
     spawned_at: new Date().toISOString(),
@@ -1323,7 +1361,6 @@ export function spawnTroop(
   return game;
 }
 
-// Mettre à jour le temps de jeu
 export function updateGameTime(id: string): GameState | null {
   const game = games.get(id);
   if (!game) return null;
@@ -1331,11 +1368,10 @@ export function updateGameTime(id: string): GameState | null {
   const now = new Date();
   const startTime = new Date(game.start_time);
   game.game_time = Math.floor((now.getTime() - startTime.getTime()) / 1000);
-  
-  // Régénérer l'elixir
+
   game.elixir.red = Math.min(game.max_elixir, game.elixir.red + game.elixir_rate * 0.1);
   game.elixir.blue = Math.min(game.max_elixir, game.elixir.blue + game.elixir_rate * 0.1);
-  
+
   games.set(id, game);
   return game;
 }

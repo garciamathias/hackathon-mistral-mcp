@@ -70,8 +70,10 @@ export default function Arena() {
     
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/game/${gameId}/state`);
+        const res = await fetch(`/api/game/${gameId}/state`, { cache: "no-store" });
+        if (!res.ok) return;
         const data = await res.json();
+        if (!data || data.error) return;
         setGameState(data);
       } catch (error) {
         console.error("Failed to fetch game state:", error);
@@ -108,12 +110,30 @@ export default function Arena() {
   const handleCellDragOver = (e: React.DragEvent) => e.preventDefault();
   const switchTeam = () => setCurrentTeam(currentTeam === 'red' ? 'blue' : 'red');
 
+  const normalizeType = (s: any): TroopType | null => {
+    const u = String(s || "").toUpperCase();
+    if (u === "GIANT" || u === "BABY_DRAGON" || u === "MINI_PEKKA" || u === "VALKYRIE") return u as TroopType;
+    console.warn("Unknown troop.type from API:", s);
+    return null;
+  };
+
+  const FALLBACK_WALK: Record<TroopType, {player: string; opponent: string}> = {
+    GIANT: { player: "/images/troops/giant/Giant_walk_player.gif", opponent: "/images/troops/giant/Giant_walk_opponent.gif" },
+    BABY_DRAGON: { player: "/images/troops/babydragon/BabyDragon_walk_player.gif", opponent: "/images/troops/babydragon/BabyDragon_walk_opponent.gif" },
+    MINI_PEKKA: { player: "/images/troops/minipekka/MiniPekka_walk_player.gif", opponent: "/images/troops/minipekka/MiniPekka_walk_opponent.gif" },
+    VALKYRIE: { player: "/images/troops/valkyrie/Valkyrie_walk_player.gif", opponent: "/images/troops/valkyrie/Valkyrie_walk_opponent.gif" },
+  };
+
   const getTroopGifPath = (troop: any) => {
-    const config = TROOP_CONFIGS[troop.type as TroopType];
-    if (!config) return null;
-    // Pour l'instant, utiliser les chemins de marche par défaut
+    const norm = normalizeType(troop?.type);
+    if (!norm) return null;
     const gifType = troop.team === 'red' ? 'player' : 'opponent';
-    return `${config.gifPaths.walk[gifType]}?v=${troop.id}`;
+    const cfg = TROOP_CONFIGS[norm];
+    const fromConfig = cfg?.gifPaths?.walk?.[gifType];
+
+    return (typeof fromConfig === "string" && fromConfig.length > 0)
+      ? `${fromConfig}?v=${troop.id}`
+      : `${FALLBACK_WALK[norm][gifType]}?v=${troop.id}`;
   };
 
   const handleRestart = () => {
@@ -122,6 +142,9 @@ export default function Arena() {
 
   if (!gameId) return null; // évite de rendre l'arène le temps de la redirection
   if (!gameState) return <div>Loading game...</div>;
+
+  // Debug: log les troupes reçues
+  console.log("TROUPES REÇUES:", gameState?.troops);
 
   return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden transition-opacity duration-1000 ${isArenaVisible ? 'opacity-100' : 'opacity-0'}`}>
@@ -157,6 +180,11 @@ export default function Arena() {
                   onDrop={(e) => handleCellDrop(row, col, e)}
                   onDragOver={handleCellDragOver}
                 >
+                  {/* Debug overlay minimal */}
+                  {(gameState.troops ?? []).some(t => Math.floor(t.position.row) === row && Math.floor(t.position.col) === col) && (
+                    <div className="absolute inset-0 z-30 pointer-events-none ring-2 ring-green-300/60"></div>
+                  )}
+                  
                   {shouldShowTower && (() => {
                     const engineTower = gameState.towers[tower!.id];
                     const dead = engineTower && engineTower.health <= 0;
@@ -192,31 +220,38 @@ export default function Arena() {
                     );
                   })()}
 
-                  {gameState.troops
-                    .filter(troop => Math.floor(troop.position.row) === row && Math.floor(troop.position.col) === col)
-                    .map(troop => {
-                      const gifPath = getTroopGifPath(troop);
-                      const config = TROOP_CONFIGS[troop.type as TroopType];
+                  {(gameState.troops ?? [])
+                    .filter(t => {
+                      const p = t?.position;
+                      return p && Number.isFinite(p.row) && Number.isFinite(p.col)
+                        && Math.floor(p.row) === row && Math.floor(p.col) === col;
+                    })
+                    .map(t => {
+                      const norm = normalizeType(t.type);
+                      if (!norm) return null;
+                      const config = TROOP_CONFIGS[norm];
+                      const gifPath = getTroopGifPath(t);
                       if (!gifPath || !config) return null;
+                      const p = t.position;
+                      const hp = typeof t.health === "number" ? t.health : 0;
+                      const maxhp = typeof t.max_health === "number" && t.max_health > 0 ? t.max_health : 1;
+
                       return (
                         <div
-                          key={troop.id}
+                          key={t.id}
                           className="absolute z-20 w-full h-full flex items-center justify-center pointer-events-none"
-                          style={{ transform: `translate(${(troop.position.col - Math.floor(troop.position.col)) * 100}%, ${(troop.position.row - Math.floor(troop.position.row)) * 100}%)` }}
+                          style={{ transform: `translate(${(p.col - Math.floor(p.col)) * 100}%, ${(p.row - Math.floor(p.row)) * 100}%)` }}
                         >
                           <img
-                            key={`${troop.id}-walk`}
                             src={gifPath}
-                            alt={`${troop.type} ${troop.team}`}
+                            alt={`${norm} ${t.team}`}
                             className="w-12 h-12 object-contain"
-                            style={{
-                              transform: `scale(${typeof config.scale === 'object' ? config.scale.walk : config.scale})`,
-                            }}
+                            style={{ transform: `scale(${typeof config?.scale === 'object' ? (config.scale.walk ?? 1) : (config?.scale ?? 1)})` }}
                           />
                           <div className="absolute -top-2 left-0 w-full h-1 bg-gray-600 rounded">
                             <div
-                              className={`h-full rounded transition-all duration-200 ${troop.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
-                              style={{ width: `${(troop.health / troop.max_health) * 100}%` }}
+                              className={`h-full rounded transition-all duration-200 ${t.team === 'red' ? 'bg-red-400' : 'bg-blue-400'}`}
+                              style={{ width: `${(hp / maxhp) * 100}%` }}
                             />
                           </div>
                         </div>
@@ -231,6 +266,13 @@ export default function Arena() {
         <div className="absolute top-4 right-4 z-10">
           <ClashTimer />
         </div>
+
+        {/* Debug: affichage temporaire de tous les troops */}
+        {(gameState.troops ?? []).map(t => (
+          <div key={t.id} className="absolute top-0 left-0 text-white bg-black p-1 text-xs z-50">
+            {t.type} {t.team} @ {t.position.row},{t.position.col}
+          </div>
+        ))}
 
         {/* Barre de cartes */}
         <div className="fixed bottom-0 left-0 right-0 z-10">

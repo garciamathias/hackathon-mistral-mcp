@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { getGame, updateGameTime } from "@/lib/gameStore";
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const game = getGame(params.id);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+
+  const game = getGame(id);
   if (!game) return NextResponse.json({ error: "Game not found" }, { status: 404 });
-  
-  // Mettre à jour le temps et l'elixir avant de retourner l'état
-  const updatedGame = updateGameTime(params.id);
+
+  const updatedGame = updateGameTime(id);
   if (!updatedGame) return NextResponse.json({ error: "Game not found" }, { status: 404 });
-  
-  return NextResponse.json(updatedGame);
+
+  return NextResponse.json(updatedGame, { headers: { "Cache-Control": "no-store" } });
 }
